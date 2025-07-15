@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Діаграма класів A3DSDK</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 0; }
+        h1 { text-align: center; margin-top: 30px; }
+        .diagram-container { display: flex; justify-content: center; margin: 40px 0; }
+        .class-diagram { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0002; padding: 30px 40px; }
+        .class-box { border: 2px solid #007bff; border-radius: 8px; padding: 16px 24px; margin: 16px auto; background: #e9f5ff; min-width: 220px; text-align: center; font-weight: bold; position: relative; }
+        .class-box.base { border-color: #28a745; background: #eaffea; }
+        .arrow { width: 0; height: 0; border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 20px solid #007bff; margin: 0 auto; }
+        .explanation { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 24px 32px; }
+        .explanation h2 { color: #007bff; }
+        .explanation ul { margin: 0 0 0 20px; }
+    </style>
+</head>
+<body>
+    <h1>Діаграма класів (A3DSDK)</h1>
+    <div class="diagram-container">
+        <div class="class-diagram">
+            <div class="class-box base">A3DMeshBase</div>
+            <div class="arrow"></div>
+            <div class="class-box">A3DSkinMesh</div>
+            <div class="arrow"></div>
+            <div class="class-box">SUBMESH</div>
+            <div class="arrow"></div>
+            <div class="class-box">SKINMESHDATA</div>
+        </div>
+    </div>
+    <div class="explanation">
+        <h2>Пояснення класів</h2>
+        <ul>
+            <li><b>A3DMeshBase</b> — Базовий клас для всіх 3D-мешів у рушії. Містить основні атрибути та методи для роботи з 3D-геометрією.</li>
+            <li><b>A3DSkinMesh</b> — Клас, що наслідує <b>A3DMeshBase</b> і реалізує скінинг (анімовану сітку з кістками). Містить методи для завантаження, рендерингу, обробки вершин, роботи з підсітками та матеріалами.</li>
+            <li><b>SUBMESH</b> — Внутрішня структура <b>A3DSkinMesh</b>, що описує підсітку: набір вершин, індексів та матеріалів для частини сітки.</li>
+            <li><b>SKINMESHDATA</b> — Структура для збереження/завантаження даних скіна: індекси текстур, матеріалів, кількість вершин та індексів.</li>
+        </ul>
+        <h2>Інші допоміжні класи</h2>
+        <ul>
+            <li><b>A3DStream</b> — Клас для роботи з потоками даних (vertex/index buffer).</li>
+            <li><b>A3DTexture</b> — Клас для представлення текстури у рушії.</li>
+            <li><b>A3DMaterial</b> — Клас для опису матеріалу (властивості поверхні).</li>
+        </ul>
+        <p>Діаграма показує ієрархію та зв'язки основних класів, які визначають структуру та функціонал скінажної сітки у рушії A3D.</p>
+    </div>
+</body>
+</html>
