@@ -98,7 +98,7 @@ class BMDExportSettings:
     flip_winding: bool = True
     mesh_version: str = "REFERENCE_V4"
     transform_mode: str = "IDENTITY"
-    texture_path_override: str = ""
+    texture_folder: str = ""
     use_reference_texture: bool = True
     use_reference_colors: bool = True
     write_zero_hull: bool = True
@@ -581,9 +581,42 @@ def _round_key(values: Iterable[float]) -> Tuple[float, ...]:
     return tuple(round(float(v), 7) for v in values)
 
 
+def _path_filename(path: str) -> str:
+    normalized = path.replace("\\", "/").rstrip("/")
+    return normalized.rsplit("/", 1)[-1] if normalized else ""
+
+
+def _join_texture_folder(folder: str, texture_name: str) -> str:
+    folder = _sanitize_path(folder.strip()).rstrip("\\/")
+    texture_name = _path_filename(_sanitize_path(texture_name.strip()))
+    if folder and texture_name:
+        return f"{folder}\\{texture_name}"
+    return texture_name or folder
+
+
+def _material_texture_name(mat, obj) -> str:
+    for source in (mat, obj):
+        if source is not None and "bmd_texture" in source:
+            return _path_filename(str(source["bmd_texture"]))
+
+    if mat and getattr(mat, "use_nodes", False):
+        for node in mat.node_tree.nodes:
+            if node.bl_idname == "ShaderNodeTexImage" and getattr(node, "image", None):
+                image = node.image
+                if image.filepath:
+                    path = bpy.path.abspath(image.filepath) if bpy else image.filepath
+                    return _path_filename(path)
+
+    return ""
+
+
 def _material_texture(mat, obj, settings: BMDExportSettings, ref: ReferenceDefaults) -> str:
-    if settings.texture_path_override.strip():
-        return _sanitize_path(settings.texture_path_override.strip())
+    texture_name = _material_texture_name(mat, obj)
+
+    if settings.texture_folder.strip():
+        if not texture_name and settings.use_reference_texture:
+            texture_name = _path_filename(ref.texture)
+        return _join_texture_folder(settings.texture_folder, texture_name)
 
     for source in (mat, obj):
         if source is not None and "bmd_texture" in source:
@@ -847,9 +880,9 @@ if bpy is not None:
             name="Flip UV V",
             default=True,
         )
-        texture_path_override: StringProperty(
-            name="Texture Path Override",
-            description="Game-relative BMD texture path written to every exported mesh, for example Building\\textures\\g\\79c.dds",
+        texture_folder: StringProperty(
+            name="Texture Folder",
+            description="Game-relative folder for exported texture paths; the texture file name is taken from the material",
             default="",
         )
         use_reference_texture: BoolProperty(
@@ -875,7 +908,7 @@ if bpy is not None:
             layout.prop(self, "axis_mode")
             layout.prop(self, "flip_winding")
             layout.prop(self, "flip_v")
-            layout.prop(self, "texture_path_override")
+            layout.prop(self, "texture_folder")
             layout.prop(self, "use_reference_texture")
             layout.prop(self, "use_reference_colors")
             layout.prop(self, "write_zero_hull")
@@ -889,7 +922,7 @@ if bpy is not None:
                 flip_winding=self.flip_winding,
                 mesh_version=self.mesh_version,
                 transform_mode=self.transform_mode,
-                texture_path_override=self.texture_path_override,
+                texture_folder=self.texture_folder,
                 use_reference_texture=self.use_reference_texture,
                 use_reference_colors=self.use_reference_colors,
                 write_zero_hull=self.write_zero_hull,
