@@ -98,6 +98,7 @@ class BMDExportSettings:
     flip_winding: bool = True
     mesh_version: str = "REFERENCE_V4"
     transform_mode: str = "IDENTITY"
+    texture_path_override: str = ""
     use_reference_texture: bool = True
     use_reference_colors: bool = True
     write_zero_hull: bool = True
@@ -581,6 +582,9 @@ def _round_key(values: Iterable[float]) -> Tuple[float, ...]:
 
 
 def _material_texture(mat, obj, settings: BMDExportSettings, ref: ReferenceDefaults) -> str:
+    if settings.texture_path_override.strip():
+        return _sanitize_path(settings.texture_path_override.strip())
+
     for source in (mat, obj):
         if source is not None and "bmd_texture" in source:
             return _sanitize_path(str(source["bmd_texture"]))
@@ -843,6 +847,11 @@ if bpy is not None:
             name="Flip UV V",
             default=True,
         )
+        texture_path_override: StringProperty(
+            name="Texture Path Override",
+            description="Game-relative BMD texture path written to every exported mesh, for example Building\\textures\\g\\79c.dds",
+            default="",
+        )
         use_reference_texture: BoolProperty(
             name="Use Reference Texture If Missing",
             default=True,
@@ -866,6 +875,7 @@ if bpy is not None:
             layout.prop(self, "axis_mode")
             layout.prop(self, "flip_winding")
             layout.prop(self, "flip_v")
+            layout.prop(self, "texture_path_override")
             layout.prop(self, "use_reference_texture")
             layout.prop(self, "use_reference_colors")
             layout.prop(self, "write_zero_hull")
@@ -879,6 +889,7 @@ if bpy is not None:
                 flip_winding=self.flip_winding,
                 mesh_version=self.mesh_version,
                 transform_mode=self.transform_mode,
+                texture_path_override=self.texture_path_override,
                 use_reference_texture=self.use_reference_texture,
                 use_reference_colors=self.use_reference_colors,
                 write_zero_hull=self.write_zero_hull,
