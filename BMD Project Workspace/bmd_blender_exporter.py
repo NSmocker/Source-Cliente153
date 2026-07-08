@@ -17,10 +17,11 @@ from typing import BinaryIO, Dict, Iterable, List, Optional, Sequence, Tuple
 try:
     import bpy
     from bpy.props import BoolProperty, EnumProperty, StringProperty
-    from bpy_extras.io_utils import ExportHelper
+    from bpy_extras.io_utils import ExportHelper, ImportHelper
 except ImportError:
     bpy = None
     ExportHelper = object
+    ImportHelper = object
 
 
 AFILE_BINARY_HEAD = b"MOXB"
@@ -28,6 +29,7 @@ A3DLITMODEL_VERSION = 0x10000002
 A3DLITMESH_REFERENCE_VERSION = 0x10000004
 A3DLITMESH_CURRENT_VERSION = 0x10000006
 ELBRUSHBUILDING_VERSION = 0x80000001
+ADDON_NAME = os.path.splitext(os.path.basename(__file__))[0]
 
 DEFAULT_REFERENCE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -99,6 +101,7 @@ class BMDExportSettings:
     mesh_version: str = "REFERENCE_V4"
     transform_mode: str = "IDENTITY"
     texture_folder: str = ""
+    texture_search_folder: str = ""
     use_reference_texture: bool = True
     use_reference_colors: bool = True
     write_zero_hull: bool = True
@@ -247,6 +250,106 @@ def parse_bmd_summary(path: str) -> Dict[str, object]:
         "trailing_size": len(trailing),
         "trailing": trailing,
     }
+
+
+def parse_bmd_meshes(path: str, apply_model_transform: bool = True) -> List[BMDMesh]:
+    data = open(path, "rb").read()
+    offset = 0
+    file_head = data[:4]
+    offset += 4 if file_head in (b"MOXB", b"MOXT") else 0
+
+    first_dword, probe = _read_u32(data, offset)
+    has_brush_header = first_dword == ELBRUSHBUILDING_VERSION
+    if has_brush_header:
+        offset = probe + 1
+
+    model_version, offset = _read_u32(data, offset)
+    scale, offset = _read_vec3(data, offset)
+    direction, offset = _read_vec3(data, offset)
+    up, offset = _read_vec3(data, offset)
+    position, offset = _read_vec3(data, offset)
+    model_matrix = _model_matrix(scale, direction, up, position)
+    mesh_count, offset = _read_i32(data, offset)
+    meshes: List[BMDMesh] = []
+
+    for _ in range(mesh_count):
+        mesh_version, offset = _read_u32(data, offset)
+        name, offset = _read_fixed_string(data, offset, 64)
+        texture, offset = _read_fixed_string(data, offset, 256)
+        vert_count, offset = _read_i32(data, offset)
+        face_count, offset = _read_i32(data, offset)
+
+        has_extra = False
+        if mesh_version == A3DLITMESH_CURRENT_VERSION:
+            has_extra = bool(data[offset])
+            offset += 1
+
+        vertices: List[BMDVertex] = []
+        for i in range(vert_count):
+            pos, offset = _read_vec3(data, offset)
+            diffuse, offset = _read_u32(data, offset)
+            u = struct.unpack_from("<f", data, offset)[0]
+            v = struct.unpack_from("<f", data, offset + 4)[0]
+            offset += 8
+
+            if apply_model_transform:
+                pos = _transform_point_row(pos, model_matrix)
+
+            vertices.append(
+                BMDVertex(
+                    pos=pos,
+                    normal=(0.0, 0.0, 0.0),
+                    diffuse=diffuse,
+                    day_color=0xFF808080,
+                    night_color=0xFF808080,
+                    uv=(u, v),
+                )
+            )
+
+        indices = []
+        if face_count > 0:
+            indices = list(struct.unpack_from("<" + "H" * (face_count * 3), data, offset))
+        offset += face_count * 3 * 2
+
+        normals: List[Vec3] = []
+        for i in range(vert_count):
+            normal, offset = _read_vec3(data, offset)
+            if apply_model_transform:
+                normal = _transform_vector_row(normal, model_matrix)
+            normals.append(_normalize(normal))
+
+        if mesh_version >= 0x10000003:
+            for _ in range(vert_count):
+                _, offset = _read_u32(data, offset)
+            for _ in range(vert_count):
+                _, offset = _read_u32(data, offset)
+
+        if has_extra:
+            offset += vert_count * 8
+
+        offset += 48
+
+        if mesh_version in (0x10000005, A3DLITMESH_CURRENT_VERSION, 0x10000100):
+            try:
+                end = data.index(b"\0", offset)
+                offset = end + 1 + 16 + 16 + 16 + 16 + 4 + 1
+            except ValueError:
+                offset = len(data)
+
+        for idx, vertex in enumerate(vertices):
+            vertex.normal = normals[idx] if idx < len(normals) else (0.0, 0.0, 0.0)
+
+        meshes.append(
+            BMDMesh(
+                name=name or f"Mesh{len(meshes) + 1}",
+                texture=texture,
+                vertices=vertices,
+                indices=indices,
+                material=BMDMaterial(),
+            )
+        )
+
+    return meshes
 
 
 def read_reference_defaults(path: str) -> ReferenceDefaults:
@@ -406,6 +509,10 @@ def _axis_convert(v: Vec3, axis_mode: str) -> Vec3:
     return v
 
 
+def _axis_convert_import(v: Vec3) -> Vec3:
+    return (v[0], v[2], v[1])
+
+
 def _clamp_byte(value: float) -> int:
     return max(0, min(255, int(value * 255.0 + 0.5)))
 
@@ -422,6 +529,64 @@ def _sanitize_path(path: str) -> str:
     while path.startswith(".\\"):
         path = path[2:]
     return path
+
+
+def _get_texture_search_folder(bmd_filepath: str) -> str:
+    """
+    Determine texture search folder based on BMD file location.
+    
+    Rules:
+    - If BMD is in a 'litmodels' folder: use parent/building/textures
+    - Otherwise: use textures folder next to BMD file
+    """
+    bmd_dir = os.path.dirname(os.path.abspath(bmd_filepath))
+    bmd_dir_name = os.path.basename(bmd_dir).lower()
+    
+    if bmd_dir_name == "litmodels":
+        # File is in litmodels, check parent/building/textures
+        parent_dir = os.path.dirname(bmd_dir)
+        building_textures = os.path.join(parent_dir, "building", "textures")
+        if os.path.isdir(building_textures):
+            return building_textures
+        # Fallback to parent directory if building/textures doesn't exist
+        return parent_dir
+    else:
+        # File is not in litmodels, use textures folder next to it
+        textures_dir = os.path.join(bmd_dir, "textures")
+        if os.path.isdir(textures_dir):
+            return textures_dir
+        # Fallback to the BMD directory itself
+        return bmd_dir
+
+
+def _resolve_texture_path(root: str, texture_path: str) -> str:
+    texture_path = _sanitize_path(texture_path).lstrip("\\/")
+    if not texture_path:
+        return ""
+    texture_path = texture_path.replace("\\", os.sep)
+    
+    # If the path contains "building\textures" or "building/textures", 
+    # extract everything after it (e.g., "Building\textures\g\7ac.dds" -> "g\7ac.dds")
+    path_lower = texture_path.lower()
+    building_textures_pos = path_lower.find(f"building{os.sep}textures")
+    if building_textures_pos != -1:
+        # Found "building\textures" in the path, get everything after it
+        after_building_textures = texture_path[building_textures_pos + len(f"building{os.sep}textures"):].lstrip(os.sep + "/\\")
+        texture_path = after_building_textures
+    
+    if os.path.isabs(texture_path):
+        return os.path.normpath(texture_path)
+
+    candidate = os.path.normpath(os.path.join(root, texture_path)) if root else os.path.normpath(texture_path)
+    if os.path.exists(candidate):
+        return candidate
+
+    if root:
+        base_name = os.path.basename(texture_path)
+        for dirpath, _, filenames in os.walk(root):
+            if base_name in filenames:
+                return os.path.normpath(os.path.join(dirpath, base_name))
+    return candidate
 
 
 def _safe_name(name: str, fallback: str) -> str:
@@ -814,6 +979,103 @@ def collect_scene_meshes(context, settings: BMDExportSettings, reference: Refere
     return result
 
 
+def import_bmd(context, filepath: str, settings: BMDExportSettings) -> Dict[str, int]:
+    if bpy is None:
+        raise RuntimeError("Blender Python API is not available")
+
+    from mathutils import Vector
+
+    meshes = parse_bmd_meshes(filepath)
+    imported_meshes = 0
+    imported_vertices = 0
+    imported_faces = 0
+
+    collection = getattr(context, "collection", None) or getattr(context.scene, "collection", None)
+    if collection is None:
+        collection = context.scene.collection
+
+    # Determine texture search folder
+    texture_root = os.path.abspath(settings.texture_search_folder) if settings.texture_search_folder else ""
+    if not texture_root:
+        prefs = get_addon_preferences(context)
+        if prefs is not None and prefs.texture_search_folder:
+            texture_root = os.path.abspath(prefs.texture_search_folder)
+    
+    # If still no texture_root, auto-determine based on BMD file location
+    if not texture_root:
+        texture_root = _get_texture_search_folder(filepath)
+
+    for mesh_data in meshes:
+        mesh_name = _safe_name(mesh_data.name, "BMDMesh")
+        blender_mesh = bpy.data.meshes.new(mesh_name)
+
+        vertices = [_axis_convert_import(v.pos) for v in mesh_data.vertices]
+        faces = [
+            (mesh_data.indices[i], mesh_data.indices[i + 2], mesh_data.indices[i + 1])
+            for i in range(0, len(mesh_data.indices), 3)
+        ]
+
+        blender_mesh.from_pydata(vertices, [], faces)
+        blender_mesh.update(calc_edges=True)
+
+        if mesh_data.vertices and any(v.uv != (0.0, 0.0) for v in mesh_data.vertices):
+            uv_layer = blender_mesh.uv_layers.new(name="UVMap")
+            for loop in blender_mesh.loops:
+                uv_layer.data[loop.index].uv = mesh_data.vertices[loop.vertex_index].uv
+
+        if mesh_data.vertices and any(_vec_len(v.normal) > 1e-6 for v in mesh_data.vertices):
+            if hasattr(blender_mesh, "use_auto_smooth"):
+                blender_mesh.use_auto_smooth = True
+            loop_normals = [
+                Vector(_axis_convert_import(mesh_data.vertices[loop.vertex_index].normal)).normalized()
+                for loop in blender_mesh.loops
+            ]
+            if hasattr(blender_mesh, "normals_split_custom_set"):
+                blender_mesh.normals_split_custom_set(loop_normals)
+            if hasattr(blender_mesh, "calc_normals_split"):
+                blender_mesh.calc_normals_split()
+
+        obj = bpy.data.objects.new(mesh_name, blender_mesh)
+        collection.objects.link(obj)
+
+        if mesh_data.texture:
+            material_name = _path_filename(mesh_data.texture) or f"{mesh_name}_mat"
+            material = bpy.data.materials.get(material_name) or bpy.data.materials.new(material_name)
+            material.use_nodes = True
+            nodes = material.node_tree.nodes
+            links = material.node_tree.links
+            bsdf = nodes.get("Principled BSDF") or nodes.new("ShaderNodeBsdfPrincipled")
+            tex_node = nodes.new("ShaderNodeTexImage")
+            
+            # Store the texture path exactly as specified in the BMD file
+            tex_node.label = mesh_data.texture
+            
+            # Try to load the texture from the search folder if specified
+            if texture_root:
+                texture_path = _resolve_texture_path(texture_root, mesh_data.texture)
+                if os.path.exists(texture_path):
+                    try:
+                        image = bpy.data.images.load(texture_path, check_existing=True)
+                        tex_node.image = image
+                    except Exception:
+                        pass
+            
+            tex_node.location = (-300, 300)
+            bsdf.location = (0, 300)
+            links.new(tex_node.outputs.get("Color"), bsdf.inputs.get("Base Color"))
+            obj.data.materials.append(material)
+
+        imported_meshes += 1
+        imported_vertices += len(vertices)
+        imported_faces += len(faces)
+
+    return {
+        "meshes": imported_meshes,
+        "vertices": imported_vertices,
+        "faces": imported_faces,
+    }
+
+
 def export_bmd(context, filepath: str, settings: BMDExportSettings) -> Dict[str, int]:
     reference = read_reference_defaults(settings.reference_path)
     meshes = collect_scene_meshes(context, settings, reference)
@@ -825,7 +1087,29 @@ def export_bmd(context, filepath: str, settings: BMDExportSettings) -> Dict[str,
     }
 
 
+def get_addon_preferences(context) -> object:
+    if bpy is None:
+        return None
+    addon = context.preferences.addons.get(ADDON_NAME)
+    return getattr(addon, "preferences", None)
+
+
 if bpy is not None:
+
+    class ANGELICA2_BMD_Preferences(bpy.types.AddonPreferences):
+        bl_idname = ADDON_NAME
+
+        texture_search_folder: StringProperty(
+            name="Texture Search Folder",
+            description="Default folder used to resolve texture paths on import",
+            default="",
+            subtype="DIR_PATH",
+        )
+
+        def draw(self, context):
+            layout = self.layout
+            layout.prop(self, "texture_search_folder")
+
 
     class EXPORT_SCENE_OT_angelica2_bmd(bpy.types.Operator, ExportHelper):
         bl_idname = "export_scene.angelica2_bmd"
@@ -941,18 +1225,73 @@ if bpy is not None:
             return {"FINISHED"}
 
 
+    class IMPORT_SCENE_OT_angelica2_bmd(bpy.types.Operator, ImportHelper):
+        bl_idname = "import_scene.angelica2_bmd"
+        bl_label = "Import Angelica2 BMD"
+        bl_options = {"PRESET"}
+
+        filename_ext = ".bmd"
+        filter_glob: StringProperty(default="*.bmd", options={"HIDDEN"})
+
+        texture_search_folder: StringProperty(
+            name="Texture Search Folder",
+            description="Base folder used to resolve texture paths from BMD mesh texture references",
+            default="",
+            subtype="DIR_PATH",
+        )
+
+        def invoke(self, context, event):
+            prefs = get_addon_preferences(context)
+            if prefs is not None:
+                self.texture_search_folder = prefs.texture_search_folder
+            return super().invoke(context, event)
+
+        def draw(self, context):
+            layout = self.layout
+            layout.prop(self, "texture_search_folder")
+
+        def execute(self, context):
+            prefs = get_addon_preferences(context)
+            if prefs is not None:
+                prefs.texture_search_folder = self.texture_search_folder
+
+            settings = BMDExportSettings(
+                texture_search_folder=bpy.path.abspath(self.texture_search_folder) if self.texture_search_folder else "",
+            )
+            try:
+                stats = import_bmd(context, self.filepath, settings)
+            except Exception as exc:
+                self.report({"ERROR"}, str(exc))
+                return {"CANCELLED"}
+
+            self.report(
+                {"INFO"},
+                f"Imported {stats['meshes']} BMD meshes, {stats['vertices']} verts, {stats['faces']} faces",
+            )
+            return {"FINISHED"}
+
+
     def _menu_export(self, context):
         self.layout.operator(EXPORT_SCENE_OT_angelica2_bmd.bl_idname, text="Angelica2 BMD (.bmd)")
 
+    def _menu_import(self, context):
+        self.layout.operator(IMPORT_SCENE_OT_angelica2_bmd.bl_idname, text="Angelica2 BMD (.bmd)")
+
 
     def register():
+        bpy.utils.register_class(ANGELICA2_BMD_Preferences)
         bpy.utils.register_class(EXPORT_SCENE_OT_angelica2_bmd)
+        bpy.utils.register_class(IMPORT_SCENE_OT_angelica2_bmd)
         bpy.types.TOPBAR_MT_file_export.append(_menu_export)
+        bpy.types.TOPBAR_MT_file_import.append(_menu_import)
 
 
     def unregister():
         bpy.types.TOPBAR_MT_file_export.remove(_menu_export)
+        bpy.types.TOPBAR_MT_file_import.remove(_menu_import)
+        bpy.utils.unregister_class(IMPORT_SCENE_OT_angelica2_bmd)
         bpy.utils.unregister_class(EXPORT_SCENE_OT_angelica2_bmd)
+        bpy.utils.unregister_class(ANGELICA2_BMD_Preferences)
 
 
 if __name__ == "__main__":

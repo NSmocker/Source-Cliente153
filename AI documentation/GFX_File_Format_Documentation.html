@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GFX File Format - Complete Documentation</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --orange: #d29922;
+            --red: #f85149;
+            --purple: #bc8cff;
+            --code-bg: #1c2128;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 0;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1e2e 0%, #0d1117 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 40px 0;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            background: linear-gradient(90deg, var(--accent), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .header p { color: var(--text-muted); font-size: 1.1em; }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 30px;
+        }
+        h2 {
+            font-size: 1.8em;
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 10px;
+            margin: 50px 0 20px 0;
+        }
+        h3 {
+            font-size: 1.3em;
+            color: var(--green);
+            margin: 30px 0 12px 0;
+        }
+        h4 {
+            font-size: 1.1em;
+            color: var(--orange);
+            margin: 20px 0 10px 0;
+        }
+        p { margin: 10px 0; }
+        code {
+            font-family: 'Consolas', 'Fira Code', monospace;
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: var(--orange);
+        }
+        pre {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-size: 0.88em;
+            line-height: 1.5;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+            color: var(--text);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        th, td {
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            text-align: left;
+        }
+        th {
+            background: var(--surface);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        td { background: var(--bg); }
+        tr:hover td { background: var(--surface); }
+        .note {
+            background: rgba(88, 166, 255, 0.1);
+            border-left: 4px solid var(--accent);
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .warning {
+            background: rgba(210, 153, 34, 0.1);
+            border-left: 4px solid var(--orange);
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 6px 6px 0;
+        }
+        .toc {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 25px 30px;
+            margin: 20px 0;
+        }
+        .toc h3 { margin-top: 0; color: var(--accent); }
+        .toc ul { list-style: none; padding-left: 0; }
+        .toc li { margin: 6px 0; }
+        .toc a {
+            color: var(--text);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .toc a:hover { color: var(--accent); }
+        .toc ul ul { padding-left: 20px; }
+        .type-badge {
+            display: inline-block;
+            background: var(--purple);
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+        .enum-val { color: var(--green); font-weight: 600; }
+        .struct-name { color: var(--purple); font-weight: 600; }
+        .comment { color: var(--text-muted); font-style: italic; }
+        .ascii-diagram {
+            background: var(--code-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85em;
+            white-space: pre;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        .section-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 40px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>GFX File Format</h1>
+    <p>Angelica Engine Visual Effects System &mdash; Complete Binary &amp; Text Format Specification</p>
+    <p style="margin-top:8px; font-size:0.9em; color:var(--text-muted)">Version 150 &bull; Reverse-engineered from Angelica2/Angelica3 Engine Source Code</p>
+</div>
+
+<div class="container">
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+    <h3>Table of Contents</h3>
+    <ul>
+        <li><a href="#overview">1. Overview &amp; Architecture</a></li>
+        <li><a href="#file-structure">2. File Structure (Text Mode)</a>
+            <ul>
+                <li><a href="#file-header">2.1 File Header</a></li>
+                <li><a href="#element-block">2.2 Element Block</a></li>
+            </ul>
+        </li>
+        <li><a href="#binary-format">3. Binary Format</a></li>
+        <li><a href="#element-types">4. Element Types (ID Reference)</a></li>
+        <li><a href="#base-element">5. Base Element Properties</a></li>
+        <li><a href="#keypoint-system">6. KeyPoint Animation System</a>
+            <ul>
+                <li><a href="#keypoint-struct">6.1 KEY_POINT Structure</a></li>
+                <li><a href="#keypoint-set">6.2 KeyPointSet</a></li>
+                <li><a href="#ctrl-methods">6.3 Control Methods</a></li>
+            </ul>
+        </li>
+        <li><a href="#shader-system">7. Shader &amp; Render System</a></li>
+        <li><a href="#texture-system">8. Texture Animation System</a></li>
+        <li><a href="#pixel-shader">9. Pixel Shader Constants</a></li>
+        <li><a href="#shake-camera">10. Camera Shake System</a></li>
+        <li><a href="#physics">11. Physics Data (.gphy)</a></li>
+        <li><a href="#element-details">12. Element-Specific Properties</a>
+            <ul>
+                <li><a href="#decal">12.1 Decal (3D / 2D / Billboard)</a></li>
+                <li><a href="#trail">12.2 Trail</a></li>
+                <li><a href="#particle">12.3 Particle Systems</a></li>
+                <li><a href="#light">12.4 Light</a></li>
+                <li><a href="#ring">12.5 Ring</a></li>
+                <li><a href="#lightning">12.6 Lightning / LightningEx / Bolt</a></li>
+                <li><a href="#model">12.7 Model</a></li>
+                <li><a href="#sound">12.8 Sound</a></li>
+                <li><a href="#container">12.9 Container (Sub-GFX)</a></li>
+                <li><a href="#grid-decal">12.10 Grid Decal</a></li>
+                <li><a href="#ecmodel">12.11 ECModel</a></li>
+                <li><a href="#ribbon">12.12 Ribbon</a></li>
+                <li><a href="#paraboloid">12.13 Paraboloid</a></li>
+            </ul>
+        </li>
+        <li><a href="#version-history">13. Version History (V1-V150)</a></li>
+        <li><a href="#unity-integration">14. Notes for Unity Integration</a></li>
+    </ul>
+</div>
+
+<!-- 1. OVERVIEW -->
+<h2 id="overview">1. Overview &amp; Architecture</h2>
+
+<p>The <strong>.gfx</strong> file format is the visual effects file format used by the <strong>Angelica Engine</strong> (Angelica2 / Angelica3). It stores particle effects, decals, trails, lightning, sounds, 3D models, and composite sub-effects in a single file. GFX files can be in <strong>text</strong> (human-readable) or <strong>binary</strong> format.</p>
+
+<h3>High-Level Architecture</h3>
+<div class="ascii-diagram">
+A3DGFXExMan (Manager)
+  |
+  +-- LoadGfx() creates A3DGFXEx objects
+  |-- Manages render containers (2D back/front, 3D default/custom)
+  |-- Particle pool, texture manager, stream manager, model manager
+  |-- Thread-safe loading with callbacks
+  |
+  +-- A3DGFXEx (Single GFX Effect)
+        |-- File version (150), default scale/speed/alpha
+        |-- Camera shake, AABB, fade-by-distance settings
+        |-- Vector of A3DGFXElement* (m_EleLst)
+        |-- Element name map (m_EleMap)
+        |-- PhysDataMan for .gphy companion
+        |
+        +-- A3DGFXElement* (Base Element)
+              |-- Name, shader, texture, pixel shader
+              |-- Bind/dummy element references
+              |-- KeyPointSet (animation keyframes)
+              |-- Tile mode, UV manipulation, render layer
+              |-- Subclasses: Decal, Trail, Particle, Lightning, Ring,
+                  Model, Sound, Container, GridDecal, PhysElement,
+                  ECMModel, Ribbon, Paraboloid
+</div>
+
+<h3>File Extensions</h3>
+<table>
+    <tr><th>Extension</th><th>Description</th></tr>
+    <tr><td><code>.gfx</code></td><td>Main visual effects file</td></tr>
+    <tr><td><code>.gfx3</code></td><td>Angelica 3 variant (higher version number)</td></tr>
+    <tr><td><code>.gphy</code></td><td>Companion physics data file (same name as .gfx)</td></tr>
+</table>
+
+<div class="note">
+    <strong>Key Fact:</strong> A single .gfx file can contain many elements of different types. Each element is independently animated via the KeyPoint system. The file format supports both text and binary encoding, detected at runtime via <code>AFile::IsBinary()</code>.
+</div>
+
+<hr class="section-divider">
+
+<!-- 2. FILE STRUCTURE -->
+<h2 id="file-structure">2. File Structure (Text Mode)</h2>
+
+<p>In text mode, the file is a series of <strong>key: value</strong> lines. Lines are read sequentially. Each line follows the format <code>Key: Value</code> where the key is a literal string.</p>
+
+<h3 id="file-header">2.1 File Header (A3DGFXEx)</h3>
+
+<p>The header is always at the start of the file and contains global effect properties.</p>
+
+<pre><code>Version: 150
+IsAngelica3: 0
+DedaultScale: 1.000000
+PlaySpeed: 1.000000
+DefaultAlpha: 1.000000
+Raytrace: 0
+FaceToViewer: 0
+FadeByDist: 0
+FadeStart: 10.000000
+FadeEnd: 50.000000
+Vec: -10.000000, -10.000000, -10.000000
+Vec: 10.000000, 10.000000, 10.000000
+UseAABB: 1
+AccurateAABB: 0
+ShakeCam: 0
+ShakeDamp: 0
+NoChangeDir: 0
+2DRender: 0
+2DBackLayer: 0
+PhysExist: 0
+GFXELEMENTCOUNT: 5
+</code></pre>
+
+<h4>Header Field Reference</h4>
+<table>
+    <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td><code>Version</code></td><td>int</td><td>150</td><td>File format version (current = 150)</td></tr>
+    <tr><td><code>IsAngelica3</code></td><td>int (bool)</td><td>0</td><td>1 = Angelica 3 format (not loadable by Angelica 2 engine)</td></tr>
+    <tr><td><code>DedaultScale</code></td><td>float</td><td>1.0</td><td>Default scale multiplier for all elements</td></tr>
+    <tr><td><code>PlaySpeed</code></td><td>float</td><td>1.0</td><td>Default playback speed multiplier</td></tr>
+    <tr><td><code>DefaultAlpha</code></td><td>float</td><td>1.0</td><td>Default alpha multiplier for all elements</td></tr>
+    <tr><td><code>Raytrace</code></td><td>int (bool)</td><td>0</td><td>Enable ray-tracing for collision</td></tr>
+    <tr><td><code>FaceToViewer</code></td><td>int (bool)</td><td>0</td><td>Effect always faces the camera</td></tr>
+    <tr><td><code>FadeByDist</code></td><td>int (bool)</td><td>0</td><td>Fade alpha based on camera distance</td></tr>
+    <tr><td><code>FadeStart</code></td><td>float</td><td>10.0</td><td>Distance where fade begins</td></tr>
+    <tr><td><code>FadeEnd</code></td><td>float</td><td>50.0</td><td>Distance where effect is fully transparent</td></tr>
+    <tr><td><code>Vec</code></td><td>3x float</td><td>--</td><td>AABB bounding box min corner (x, y, z)</td></tr>
+    <tr><td><code>Vec</code></td><td>3x float</td><td>--</td><td>AABB bounding box max corner (x, y, z)</td></tr>
+    <tr><td><code>UseAABB</code></td><td>int (bool)</td><td>1</td><td>Use AABB for frustum culling</td></tr>
+    <tr><td><code>AccurateAABB</code></td><td>int (bool)</td><td>0</td><td>Use rotated AABB (8 vertices) for accurate culling</td></tr>
+    <tr><td><code>ShakeCam</code></td><td>int (enum)</td><td>0</td><td>Camera shake type (0=None, 1=Random, 2=Up-Down)</td></tr>
+    <tr><td><code>ShakeDamp</code></td><td>int</td><td>0</td><td>Shake damping affector type</td></tr>
+    <tr><td><code>NoChangeDir</code></td><td>int (bool)</td><td>0</td><td>Prevent direction changes at runtime</td></tr>
+    <tr><td><code>2DRender</code></td><td>int (bool)</td><td>0</td><td>Render in 2D viewport mode</td></tr>
+    <tr><td><code>2DBackLayer</code></td><td>int (bool)</td><td>0</td><td>Render in 2D back layer (behind scene)</td></tr>
+    <tr><td><code>SkipTime</code></td><td>int</td><td>0</td><td>Skip initial time (ms) on start</td></tr>
+    <tr><td><code>PhysExist</code></td><td>int (bool)</td><td>0</td><td>Whether .gphy physics data exists</td></tr>
+    <tr><td><code>GFXELEMENTCOUNT</code></td><td>int</td><td>--</td><td>Number of elements following in file</td></tr>
+</table>
+
+<div class="note">
+    <strong>ShakeCam values:</strong><br>
+    <code>0</code> = SHAKECAM_NONE (no shake)<br>
+    <code>1</code> = SHAKECAM_DIR_RAND (random direction shake)<br>
+    <code>2</code> = SHAKECAM_UP_DOWN (vertical shake only)
+</div>
+
+<h3 id="element-block">2.2 Element Block</h3>
+
+<p>Each element begins with <code>GFXELEMENTID: &lt;type_id&gt;</code> and is followed by the base element properties, then element-specific properties, and finally the KeyPoint animation data.</p>
+
+<pre><code>GFXELEMENTID: 120
+Name: ParticleSystem1
+SrcBlend: 2
+DestBlend: 3
+RepeatCount: -1
+RepeatDelay: 0
+TexFile: particle.bmp
+BindEle: 
+ZEnable: 1
+MatchGrnd: 0
+GroundHeight: 0
+TexRow: 4
+TexCol: 4
+TexInterval: 100
+Priority: 0
+IsDummy: 0
+DummyEle: 
+Warp: 0
+TileMode: 0
+TexSpeed: 0.000000
+TexSpeed: 0.000000
+RenderLayer: 0
+NoDownSample: 0
+ResetLoopEnd: 0
+TexAnimMaxTime: 0
+PSFileVersion: 1
+ShaderFile: 
+ShaderTex: 
+PSConstCount: 0
+CanDoFadeOut: 0
+SoftEdge: 0
+UseInnerLight: 0
+&lt;-- Element-specific properties follow --&gt;
+&lt;-- KeyPoint data follows --&gt;
+</code></pre>
+
+<hr class="section-divider">
+
+<!-- 3. BINARY FORMAT -->
+<h2 id="binary-format">3. Binary Format</h2>
+
+<p>The binary format is a packed version of the text format. Fields are written in the exact same order as the text format, but as raw bytes.</p>
+
+<h3>Binary File Header</h3>
+<pre><code>DWORD   m_dwVersion;            // 4 bytes, little-endian
+float   m_fDefScale;            // 4 bytes
+float   m_fDefPlaySpeed;        // 4 bytes
+float   m_fDefAlpha;            // 4 bytes
+bool    m_bUseRaytrace;         // 1 byte
+bool    m_bFaceToViewer;        // 1 byte
+bool    m_bFadeByDist;          // 1 byte
+float   m_fFadeStart;           // 4 bytes
+float   m_fFadeEnd;             // 4 bytes
+float   m_AABBOrg.Mins[3];      // 12 bytes (3 floats)
+float   m_AABBOrg.Maxs[3];      // 12 bytes (3 floats)
+// If ShakeCam != NONE:
+  &lt;ShakeNoise data (variable)&gt;
+DWORD   m_ElementCount;         // 4 bytes
+</code></pre>
+
+<h3>Binary Element Header</h3>
+<pre><code>int     m_nEleType;             // 4 bytes (element type ID)
+String  m_strName;              // length-prefixed string
+int     m_Shader.SrcBlend;      // 4 bytes
+int     m_Shader.DestBlend;     // 4 bytes
+int     nRepeatCount;           // 4 bytes
+DWORD   nRepeatDelay;           // 4 bytes
+String  m_strTexture;           // length-prefixed string
+String  m_strBind;              // length-prefixed string
+bool    m_bZEnable;             // 1 byte
+int     m_nTexRow;              // 4 bytes
+int     m_nTexCol;              // 4 bytes
+DWORD   m_dwTexInterval;        // 4 bytes
+int     m_nPriority;            // 4 bytes
+bool    m_bDummy;               // 1 byte
+String  m_strDummy;             // length-prefixed string
+bool    m_bWarp;                // 1 byte
+bool    m_bTileMode;            // 1 byte
+float   m_fUOffsetSpeed;        // 4 bytes
+float   m_fVOffsetSpeed;        // 4 bytes
+int     m_nRenderLayer;         // 4 bytes
+</code></pre>
+
+<p>After the base element header, the element-specific <code>Load()</code> method reads its own data, then the KeyPointSet is loaded.</p>
+
+<div class="warning">
+    <strong>Binary strings</strong> are length-prefixed: a <code>DWORD</code> (4 bytes) length, followed by that many characters (not null-terminated in some implementations).
+</div>
+
+<hr class="section-divider">
+
+<!-- 4. ELEMENT TYPES -->
+<h2 id="element-types">4. Element Types (ID Reference)</h2>
+
+<table>
+    <tr><th>ID</th><th>Constant</th><th>Class</th><th>Description</th></tr>
+    <tr><td><span class="enum-val">-1</span></td><td><code>ID_ELE_TYPE_NONE</code></td><td>--</td><td>Invalid / placeholder</td></tr>
+    <tr><td><span class="enum-val">100</span></td><td><code>ID_ELE_TYPE_DECAL_3D</code></td><td>A3DDecalEx</td><td>3D Decal (projected texture on surfaces)</td></tr>
+    <tr><td><span class="enum-val">101</span></td><td><code>ID_ELE_TYPE_DECAL_2D</code></td><td>A3DDecalEx</td><td>2D Decal (screen-space billboard)</td></tr>
+    <tr><td><span class="enum-val">102</span></td><td><code>ID_ELE_TYPE_DECAL_BILLBOARD</code></td><td>A3DDecalEx</td><td>Billboard Decal (always faces camera)</td></tr>
+    <tr><td><span class="enum-val">110</span></td><td><code>ID_ELE_TYPE_TRAIL</code></td><td>A3DTrail</td><td>Trail / ribbon strip effect</td></tr>
+    <tr><td><span class="enum-val">120</span></td><td><code>ID_ELE_TYPE_PARTICLE_POINT</code></td><td>A3DParticleSystemEx</td><td>Point emitter particles</td></tr>
+    <tr><td><span class="enum-val">121</span></td><td><code>ID_ELE_TYPE_PARTICLE_BOX</code></td><td>A3DParticleSystemEx</td><td>Box emitter particles</td></tr>
+    <tr><td><span class="enum-val">122</span></td><td><code>ID_ELE_TYPE_PARTICLE_MULTIPLANE</code></td><td>A3DParticleSystemEx</td><td>Multi-plane emitter particles</td></tr>
+    <tr><td><span class="enum-val">123</span></td><td><code>ID_ELE_TYPE_PARTICLE_ELLIPSOID</code></td><td>A3DParticleSystemEx</td><td>Ellipsoid emitter particles</td></tr>
+    <tr><td><span class="enum-val">124</span></td><td><code>ID_ELE_TYPE_PARTICLE_CYLINDER</code></td><td>A3DParticleSystemEx</td><td>Cylinder emitter particles</td></tr>
+    <tr><td><span class="enum-val">125</span></td><td><code>ID_ELE_TYPE_PARTICLE_CURVE</code></td><td>A3DParticleSystemEx</td><td>Curve emitter particles</td></tr>
+    <tr><td><span class="enum-val">130</span></td><td><code>ID_ELE_TYPE_LIGHT</code></td><td>A3DGFXLight</td><td>Dynamic point/spot/directional light</td></tr>
+    <tr><td><span class="enum-val">140</span></td><td><code>ID_ELE_TYPE_RING</code></td><td>A3DGFXRing</td><td>Ring / shockwave effect</td></tr>
+    <tr><td><span class="enum-val">150</span></td><td><code>ID_ELE_TYPE_LIGHTNING</code></td><td>A3DGFXLightning</td><td>Lightning bolt / electricity</td></tr>
+    <tr><td><span class="enum-val">151</span></td><td><code>ID_ELE_TYPE_LTNBOLT</code></td><td>A3DLtnBolt</td><td>Lightning bolt variant</td></tr>
+    <tr><td><span class="enum-val">152</span></td><td><code>ID_ELE_TYPE_LIGHTNINGEX</code></td><td>A3DGFXLightningEx</td><td>Extended lightning with appending</td></tr>
+    <tr><td><span class="enum-val">160</span></td><td><code>ID_ELE_TYPE_MODEL</code></td><td>A3DGFXModel</td><td>3D model (M3D/MDL file)</td></tr>
+    <tr><td><span class="enum-val">170</span></td><td><code>ID_ELE_TYPE_SOUND</code></td><td>A3DGFXSound</td><td>3D positional sound / 2D sound</td></tr>
+    <tr><td><span class="enum-val">180</span></td><td><code>ID_ELE_TYPE_LTNTRAIL</code></td><td>A3DLtnTrail</td><td>Lightning trail (hybrid trail+lightning)</td></tr>
+    <tr><td><span class="enum-val">190</span></td><td><code>ID_ELE_TYPE_PARABOLOID</code></td><td>A3DParaboloid</td><td>Paraboloid shape effect</td></tr>
+    <tr><td><span class="enum-val">200</span></td><td><code>ID_ELE_TYPE_GFX_CONTAINER</code></td><td>A3DGFXContainer</td><td>Sub-GFX container (nested .gfx file)</td></tr>
+    <tr><td><span class="enum-val">210</span></td><td><code>ID_ELE_TYPE_GRID_DECAL_3D</code></td><td>A3DGridDecalEx</td><td>3D grid decal (editable vertex grid)</td></tr>
+    <tr><td><span class="enum-val">211</span></td><td><code>ID_ELE_TYPE_GRID_DECAL_2D</code></td><td>A3DGridDecalEx</td><td>2D grid decal</td></tr>
+    <tr><td><span class="enum-val">220</span></td><td><code>ID_ELE_TYPE_PHYS_EMITTER</code></td><td>A3DPhysEmitter</td><td>PhysX-based fluid emitter (triangle list)</td></tr>
+    <tr><td><span class="enum-val">221</span></td><td><code>ID_ELE_TYPE_PHYS_POINTEMITTER</code></td><td>A3DPhysPointEmitter</td><td>PhysX-based fluid emitter (point list)</td></tr>
+    <tr><td><span class="enum-val">230</span></td><td><code>ID_ELE_TYPE_ECMODEL</code></td><td>A3DGFXECModel</td><td>ECModel character model in GFX</td></tr>
+    <tr><td><span class="enum-val">240</span></td><td><code>ID_ELE_TYPE_RIBBON</code></td><td>A3DRibbon</td><td>Ribbon effect with gravity/noise</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- 5. BASE ELEMENT PROPERTIES -->
+<h2 id="base-element">5. Base Element Properties</h2>
+
+<p>Every element inherits these common properties from <code>A3DGFXElement</code>:</p>
+
+<table>
+    <tr><th>Field</th><th>Type</th><th>Min Ver</th><th>Description</th></tr>
+    <tr><td><code>GFXELEMENTID</code></td><td>int</td><td>1</td><td>Element type ID (see table above)</td></tr>
+    <tr><td><code>Name</code></td><td>string</td><td>1</td><td>Unique element name</td></tr>
+    <tr><td><code>SrcBlend</code></td><td>int</td><td>1</td><td>Source blend mode (D3D blend enum)</td></tr>
+    <tr><td><code>DestBlend</code></td><td>int</td><td>1</td><td>Destination blend mode (D3D blend enum)</td></tr>
+    <tr><td><code>RepeatCount</code></td><td>int</td><td>1</td><td>Loop count (-1 = infinite)</td></tr>
+    <tr><td><code>RepeatDelay</code></td><td>int (ms)</td><td>1</td><td>Delay between repeats (milliseconds)</td></tr>
+    <tr><td><code>TexFile</code></td><td>string</td><td>1</td><td>Texture file path (relative to Gfx/Textures/)</td></tr>
+    <tr><td><code>BindEle</code></td><td>string</td><td>4</td><td>Name of element to bind to (follow its transform)</td></tr>
+    <tr><td><code>ZEnable</code></td><td>int (bool)</td><td>8</td><td>Enable Z-buffer testing</td></tr>
+    <tr><td><code>MatchGrnd</code></td><td>int (bool)</td><td>22</td><td>Match ground normal (orient to surface)</td></tr>
+    <tr><td><code>GroundHeight</code></td><td>int (bool)</td><td>57</td><td>Use ground height for initial position</td></tr>
+    <tr><td><code>TexRow</code></td><td>int</td><td>9</td><td>Texture animation rows (sprite sheet)</td></tr>
+    <tr><td><code>TexCol</code></td><td>int</td><td>9</td><td>Texture animation columns (sprite sheet)</td></tr>
+    <tr><td><code>TexInterval</code></td><td>int (ms)</td><td>9</td><td>Time between texture frames</td></tr>
+    <tr><td><code>Priority</code></td><td>int</td><td>28</td><td>Render priority (lower = renders first)</td></tr>
+    <tr><td><code>IsDummy</code></td><td>int (bool)</td><td>32</td><td>Is this a dummy (invisible helper) element</td></tr>
+    <tr><td><code>DummyEle</code></td><td>string</td><td>32</td><td>Name of dummy element to use</td></tr>
+    <tr><td><code>Warp</code></td><td>int (bool)</td><td>33</td><td>Enable space warp distortion</td></tr>
+    <tr><td><code>TileMode</code></td><td>int (bool)</td><td>34</td><td>UV tile scrolling mode</td></tr>
+    <tr><td><code>TexSpeed</code></td><td>float x2</td><td>34</td><td>U and V scroll speed</td></tr>
+    <tr><td><code>UReverse</code></td><td>int (bool)</td><td>41</td><td>Reverse U texture coordinates</td></tr>
+    <tr><td><code>VReverse</code></td><td>int (bool)</td><td>41</td><td>Reverse V texture coordinates</td></tr>
+    <tr><td><code>UVExchg</code></td><td>int (bool)</td><td>41</td><td>Swap U and V texture coordinates</td></tr>
+    <tr><td><code>RenderLayer</code></td><td>int</td><td>45</td><td>Render layer (0-8, see enum)</td></tr>
+    <tr><td><code>NoDownSample</code></td><td>int (bool)</td><td>58</td><td>Prevent texture downsampling</td></tr>
+    <tr><td><code>ResetLoopEnd</code></td><td>int (bool)</td><td>74</td><td>Reset state when loop ends</td></tr>
+    <tr><td><code>TexAnimMaxTime</code></td><td>int (ms)</td><td>75</td><td>Max texture animation time (0=unlimited)</td></tr>
+    <tr><td><code>CanDoFadeOut</code></td><td>int (bool)</td><td>92</td><td>Element supports fade-out</td></tr>
+    <tr><td><code>SoftEdge</code></td><td>int (bool)</td><td>104</td><td>Enable soft edge rendering</td></tr>
+    <tr><td><code>UseInnerLight</code></td><td>int (bool)</td><td>118</td><td>Use inner lighting</td></tr>
+</table>
+
+<h3>Render Layers</h3>
+<table>
+    <tr><th>Value</th><th>Constant</th><th>Description</th></tr>
+    <tr><td>0</td><td><code>GFX_RENDER_LAYER_NORMAL</code></td><td>Default rendering</td></tr>
+    <tr><td>1</td><td><code>GFX_RENDER_LAYER_BASE1</code></td><td>Base layer 1</td></tr>
+    <tr><td>2</td><td><code>GFX_RENDER_LAYER_FRONT1</code></td><td>Front layer 1</td></tr>
+    <tr><td>3</td><td><code>GFX_RENDER_LAYER_BASE2</code></td><td>Base layer 2</td></tr>
+    <tr><td>4</td><td><code>GFX_RENDER_LAYER_FRONT2</code></td><td>Front layer 2</td></tr>
+    <tr><td>5-8</td><td>BASE3/FRONT3/BASE4/FRONT4</td><td>Additional layers</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- 6. KEYPOINT SYSTEM -->
+<h2 id="keypoint-system">6. KeyPoint Animation System</h2>
+
+<p>The KeyPoint system is the core animation mechanism. Each element contains a <code>KeyPointSet</code> which holds a list of <code>KeyPoint</code> objects. Each KeyPoint defines a transform state (position, rotation, color, scale) and a time span. Between KeyPoints, the engine interpolates to create smooth animation.</p>
+
+<h3 id="keypoint-struct">6.1 KEY_POINT Structure</h3>
+
+<pre><code>struct KEY_POINT {
+    A3DVECTOR3      m_vPos;     // Position (x, y, z)
+    A3DCOLOR        m_color;    // RGBA color (4 bytes, ABGR format in memory)
+    float           m_fScale;   // Uniform scale factor
+    A3DQUATERNION   m_vDir;     // 3D rotation quaternion (x, y, z, w)
+    float           m_fRad2D;   // 2D rotation angle (radians, around Z axis)
+};
+</code></pre>
+
+<h3 id="keypoint-set">6.2 KeyPointSet</h3>
+
+<p>The <code>A3DGFXKeyPointSet</code> manages a sequence of KeyPoints with timing and looping:</p>
+
+<pre><code>class A3DGFXKeyPointSet {
+    vector&lt;A3DGFXKeyPoint*&gt; m_KeyPointArray;  // Array of key points
+    DWORD   m_dwTimeStart;      // Start time offset (ms)
+    DWORD   m_dwTimeSpan;       // Current elapsed time (ms)
+    int     m_nRepeatCount;     // Loop count (-1 = infinite, 0+ = finite)
+    int     m_nCurRepeat;       // Current loop iteration
+    DWORD   m_dwRepeatDelay;    // Delay between repeats (ms)
+    DWORD   m_dwCurDelay;       // Current delay countdown
+    int     m_nActKeyPoint;     // Currently active key point index
+    bool    m_bInDelay;         // Currently in repeat delay
+    PROC_DATA m_ProcData;       // Processed/interpolated data
+};
+</code></pre>
+
+<h3>KeyPoint Serialization (Text)</h3>
+<pre><code>// KeyPointSet starts with these fields:
+KeyPointCount: 3
+TimeStart: 0
+RepeatCount: -1
+RepeatDelay: 0
+
+// Then each KeyPoint:
+KP_Pos: 0.000000, 0.000000, 0.000000
+KP_Dir: 0.000000, 0.000000, 0.000000, 1.000000
+KP_Color: 255, 255, 255, 255
+KP_Scale: 1.000000
+KP_Rad2D: 0.000000
+KP_Infinite: 0
+KP_Interp: 1
+KP_TimeSpan: 2000
+
+// Then control methods for this keypoint:
+KP_CtrlCount: 2
+KP_CtrlType: 100        // ID_KPCTRL_MOVE
+  ... ctrl data ...
+KP_CtrlType: 105        // ID_KPCTRL_COLOR
+  ... ctrl data ...
+</code></pre>
+
+<h3>Interpolation Modes</h3>
+<table>
+    <tr><th>Value</th><th>Constant</th><th>Description</th></tr>
+    <tr><td>0</td><td><code>enumInterpNone</code></td><td>No interpolation (snap to next keypoint)</td></tr>
+    <tr><td>1</td><td><code>enumInterpAll</code></td><td>Interpolate all properties (pos, dir, color, scale)</td></tr>
+    <tr><td>2</td><td><code>enumInterpNoDir</code></td><td>Interpolate everything except direction</td></tr>
+</table>
+
+<h3 id="ctrl-methods">6.3 Control Methods</h3>
+
+<p>Each KeyPoint can have multiple control methods that modify the processed data over time.</p>
+
+<table>
+    <tr><th>ID</th><th>Constant</th><th>Description</th></tr>
+    <tr><td><span class="enum-val">100</span></td><td><code>ID_KPCTRL_MOVE</code></td><td>Linear movement with velocity and acceleration</td></tr>
+    <tr><td><span class="enum-val">101</span></td><td><code>ID_KPCTRL_ROT</code></td><td>Self rotation (spin) with angular velocity/acceleration</td></tr>
+    <tr><td><span class="enum-val">102</span></td><td><code>ID_KPCTRL_ROTAXIS</code></td><td>Rotation around arbitrary axis</td></tr>
+    <tr><td><span class="enum-val">103</span></td><td><code>ID_KPCTRL_REVOL</code></td><td>Revolution around a point (orbital motion)</td></tr>
+    <tr><td><span class="enum-val">104</span></td><td><code>ID_KPCTRL_CENTRI</code></td><td>Centripetal movement toward a point</td></tr>
+    <tr><td><span class="enum-val">105</span></td><td><code>ID_KPCTRL_COLOR</code></td><td>Color change (R, G, B, A delta per second)</td></tr>
+    <tr><td><span class="enum-val">106</span></td><td><code>ID_KPCTRL_SCALE</code></td><td>Scale change with delta, min, max bounds</td></tr>
+    <tr><td><span class="enum-val">107</span></td><td><code>ID_KPCTRL_CL_NOISE</code></td><td>Color noise (Perlin noise on color)</td></tr>
+    <tr><td><span class="enum-val">108</span></td><td><code>ID_KPCTRL_CL_TRANS</code></td><td>Color transition (multi-step color keyframes)</td></tr>
+    <tr><td><span class="enum-val">109</span></td><td><code>ID_KPCTRL_SCA_NOISE</code></td><td>Scale noise (Perlin noise on scale)</td></tr>
+    <tr><td><span class="enum-val">110</span></td><td><code>ID_KPCTRL_CURVE_MOVE</code></td><td>Move along Bezier curve path</td></tr>
+    <tr><td><span class="enum-val">111</span></td><td><code>ID_KPCTRL_SCALE_TRANS</code></td><td>Scale transition (multi-step scale keyframes)</td></tr>
+    <tr><td><span class="enum-val">112</span></td><td><code>ID_KPCTRL_NOISE_BASE</code></td><td>Noise base parameters (buffer, amplitude, wavelength, persistence, octaves)</td></tr>
+</table>
+
+<h4>Control Method Parameters</h4>
+
+<h5>Move (100)</h5>
+<pre><code>ID_KPCTRL_MOVE_DIR: 0.000000, 1.000000, 0.000000   // Direction (normalized)
+ID_KPCTRL_MOVE_VEL: 50.000000                         // Initial velocity (units/sec)
+ID_KPCTRL_MOVE_ACC: 0.000000                          // Acceleration (units/sec^2)
+ID_KPCTRL_BASE_START_TM: 0                            // Start time (ms)
+ID_KPCTRL_BASE_END_TM: -1                             // End time (ms, -1 = infinite)
+</code></pre>
+
+<h5>Rotation (101)</h5>
+<pre><code>ID_KPCTRL_ROT_VEL: 180.000000   // Angular velocity (degrees/sec)
+ID_KPCTRL_ROT_ACC: 0.000000     // Angular acceleration (degrees/sec^2)
+</code></pre>
+
+<h5>Revolution (103)</h5>
+<pre><code>ID_KPCTRL_REVOL_POS: 0.000000, 5.000000, 0.000000   // Orbit center
+ID_KPCTRL_REVOL_DIR: 0.000000, 1.000000, 0.000000   // Orbit axis (normalized)
+ID_KPCTRL_REVOL_VEL: 360.000000                       // Angular velocity (deg/sec)
+ID_KPCTRL_REVOL_ACC: 0.000000                         // Angular acceleration
+</code></pre>
+
+<h5>Color Transition (108)</h5>
+<pre><code>ID_KPCTRL_CLTRAN_ORG: 255, 255, 255, 255     // Starting color (RGBA)
+ID_KPCTRL_CLTRAN_NUM: 3                        // Number of destination colors
+ID_KPCTRL_CLTRAN_DEST1: 255, 0, 0, 255        // Destination 1
+ID_KPCTRL_CLTRAN_TIME1: 1000                   // Transition time to dest 1 (ms)
+ID_KPCTRL_CLTRAN_DEST2: 0, 255, 0, 255        // Destination 2
+ID_KPCTRL_CLTRAN_TIME2: 1000                   // Transition time to dest 2 (ms)
+ID_KPCTRL_CLTRAN_DEST3: 0, 0, 255, 255        // Destination 3
+ID_KPCTRL_CLTRAN_TIME3: 1000                   // Transition time to dest 3 (ms)
+ID_KPCTLR_CLTRAN_ALPHAONLY: 0                  // Only affect alpha channel
+</code></pre>
+
+<h5>Curve Move (110)</h5>
+<pre><code>// Bezier curve control points
+KP_CurveVertCount: 4
+KP_CurveVert: 0.000000, 0.000000, 0.000000
+KP_CurveVert: 1.000000, 5.000000, 0.000000
+KP_CurveVert: 3.000000, 5.000000, 0.000000
+KP_CurveVert: 4.000000, 0.000000, 0.000000
+KP_CurveCalcDir: 1   // Calculate direction along curve
+</code></pre>
+
+<h5>Noise Base (112)</h5>
+<pre><code>ID_KPCTRL_NOISE_BUFLEN: 256       // Noise buffer length
+ID_KPCTRL_NOISE_AMP: 2.000000     // Amplitude
+ID_KPCTRL_NOISE_WAVLEN: 1         // Wavelength
+ID_KPCTRL_NOISE_PERSIST: 0.250000 // Persistence (octave decay)
+ID_KPCTRL_NOISE_OCTNUM: 5         // Number of octaves
+</code></pre>
+
+<hr class="section-divider">
+
+<!-- 7. SHADER SYSTEM -->
+<h2 id="shader-system">7. Shader &amp; Render System</h2>
+
+<h3>A3DSHADER Structure</h3>
+<pre><code>struct A3DSHADER {
+    int SrcBlend;    // Source blend factor (D3DBLEND enum)
+    int DestBlend;   // Destination blend factor (D3DBLEND enum)
+};
+</code></pre>
+
+<h3>Common Blend Modes</h3>
+<table>
+    <tr><th>D3D Value</th><th>Constant</th><th>Usage</th></tr>
+    <tr><td>1</td><td><code>D3DBLEND_ZERO</code></td><td>Invisible</td></tr>
+    <tr><td>2</td><td><code>D3DBLEND_ONE</code></td><td>Opaque / additive</td></tr>
+    <tr><td>3</td><td><code>D3DBLEND_SRCCOLOR</code></td><td>Multiply by source color</td></tr>
+    <tr><td>4</td><td><code>D3DBLEND_INVSRCCOLOR</code></td><td>Inverse source color</td></tr>
+    <tr><td>5</td><td><code>D3DBLEND_SRCALPHA</code></td><td>Standard alpha blend</td></tr>
+    <tr><td>6</td><td><code>D3DBLEND_INVSRCALPHA</code></td><td>Inverse alpha blend</td></tr>
+    <tr><td>9</td><td><code>D3DBLEND_DESTALPHA</code></td><td>Destination alpha</td></tr>
+    <tr><td>10</td><td><code>D3DBLEND_INVDESTALPHA</code></td><td>Inverse destination alpha</td></tr>
+</table>
+
+<h3>Built-in Shader Presets</h3>
+<table>
+    <tr><th>ID</th><th>Constant</th><th>Description</th></tr>
+    <tr><td>100</td><td><code>ID_SHADER_NORMAL</code></td><td>Standard rendering</td></tr>
+    <tr><td>101</td><td><code>ID_SHADER_HILIGHT</code></td><td>Highlight / glow effect</td></tr>
+    <tr><td>102</td><td><code>ID_SHADER_SUPER_HILIGHT</code></td><td>Intense highlight</td></tr>
+    <tr><td>103</td><td><code>ID_SHADER_COLOR</code></td><td>Color-only rendering</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- 8. TEXTURE SYSTEM -->
+<h2 id="texture-system">8. Texture Animation System</h2>
+
+<p>Each element supports two texture animation modes:</p>
+
+<h3>Sprite Sheet Mode (TileMode = 0)</h3>
+<p>Texture is divided into a grid of <code>TexRow</code> x <code>TexCol</code> frames. Frames advance at <code>TexInterval</code> ms each.</p>
+<pre><code>TexRow: 4           // 4 rows in sprite sheet
+TexCol: 4           // 4 columns in sprite sheet
+TexInterval: 100    // 100ms per frame
+TexAnimMaxTime: 0   // 0 = loop forever
+</code></pre>
+
+<h3>UV Scrolling Mode (TileMode = 1)</h3>
+<p>Texture UV coordinates scroll continuously at given speeds.</p>
+<pre><code>TileMode: 1
+TexSpeed: 0.500000  // U scroll speed
+TexSpeed: 0.000000  // V scroll speed
+</code></pre>
+
+<hr class="section-divider">
+
+<!-- 9. PIXEL SHADER -->
+<h2 id="pixel-shader">9. Pixel Shader Constants</h2>
+
+<p>Starting from version 91, elements can have pixel shader constants that animate over time.</p>
+
+<pre><code>PSFileVersion: 1
+ShaderFile: my_effect.psh       // Pixel shader file path
+ShaderTex: noise.dds            // Additional texture for shader
+PSConstCount: 2                 // Number of constant registers
+
+// For each constant:
+PSConstIndex: 0                 // Register index
+PSConstValue: 1.0, 0.5, 0.0, 1.0  // Initial value (r, g, b, a)
+PSLoopCount: -1                 // Loop count (-1=infinite)
+PSTargetCount: 3                // Number of target values
+
+// For each target:
+PSInterval: 500                 // Time to reach this target (ms)
+PSConstValue: 0.0, 1.0, 0.5, 1.0  // Target value
+</code></pre>
+
+<div class="note">
+    <strong>Pixel Shader Target Animation:</strong> If interval > 0, the value interpolates from previous value to target over that time. If interval = 0, it's an instant jump. If interval &lt; 0, it acts as a "hold" marker (value stays at previous level for |interval| ms).
+</div>
+
+<hr class="section-divider">
+
+<!-- 10. CAMERA SHAKE -->
+<h2 id="shake-camera">10. Camera Shake System</h2>
+
+<p>When <code>ShakeCam != 0</code>, a noise generator and shake camera module are attached to the effect.</p>
+
+<h3>Shake Camera Parameters</h3>
+<pre><code>ShakeCam: 1                      // Shake type (1=random, 2=up-down)
+&lt;NoiseBase data&gt;                 // Perlin noise parameters for shake
+ShakeDamp: 1                     // Damping type (0=none, 1=linear, 2=quadratic)
+ShakePeriod: 2000                // Shake period (ms)
+ShakeByDistance: 1               // Attenuate shake by distance to camera
+ShakeCameraBlur:
+  FrameCo: 0.5                   // Motion blur coefficient
+  FadeTime: 500                  // Blur fade time (ms)
+  MaxPixelOffset: 10.0           // Maximum pixel offset for blur
+</code></pre>
+
+<h3>Shake Damping Types</h3>
+<table>
+    <tr><th>Value</th><th>Constant</th><th>Description</th></tr>
+    <tr><td>0</td><td><code>SA_NONE</code></td><td>No damping</td></tr>
+    <tr><td>1</td><td><code>SA_LINEAR</code></td><td>Linear decay over time</td></tr>
+    <tr><td>2</td><td><code>SA_QUADRATIC</code></td><td>Quadratic (faster) decay</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- 11. PHYSICS -->
+<h2 id="physics">11. Physics Data (.gphy)</h2>
+
+<p>Physics-enabled elements store their data in a separate <code>.gphy</code> file with the same base name as the .gfx file. The GFX file header contains <code>PhysExist: 1</code> when physics data is present.</p>
+
+<pre><code>// Example: explosion.gfx has PhysExist: 1
+// Engine looks for: explosion.gphy in the same directory
+// Contains PhysX scene data for particle physics
+</code></pre>
+
+<hr class="section-divider">
+
+<!-- 12. ELEMENT DETAILS -->
+<h2 id="element-details">12. Element-Specific Properties</h2>
+
+<h3 id="decal">12.1 Decal (3D / 2D / Billboard) &mdash; IDs 100, 101, 102</h3>
+<pre><code>DecalWidth: 1.000000              // Width of decal quad
+DecalHeight: 1.000000             // Height of decal quad
+DecalRotFromView: 0               // Rotate to face view direction
+DecalGrndNormOnly: 0              // Only use ground normal (ignore height)
+DecalNoWidScale: 0                // Don't apply width scaling
+DecalNoHeiScale: 0                // Don't apply height scaling
+DecalOrgPtWid: 0.500000           // Origin point width ratio (0-1)
+DecalOrgPtHei: 0.500000           // Origin point height ratio (0-1)
+DecalZOffset: 0.000000            // Z offset from surface
+DecalMatchSurface: 0              // Match surface orientation
+DecalYawEffectGrndNorm: 0         // Yaw affected by ground normal
+DecalSurfaceUseParentDir: 0       // Surface uses parent direction
+</code></pre>
+
+<h3 id="trail">12.2 Trail &mdash; ID 110</h3>
+<pre><code>TrailOrgPos1: 0.0, 0.0, 0.0      // Trail origin point 1 (local space)
+TrailOrgPos2: 0.0, 1.0, 0.0      // Trail origin point 2 (local space)
+TrailSegLife: 1000                 // Segment lifetime (ms)
+TrailBind: ElementName             // Bind to another element
+TrailSplineMode: 0                 // 0=linear, 1=spline interpolation
+</code></pre>
+
+<h3 id="particle">12.3 Particle Systems &mdash; IDs 120-125</h3>
+<p>All particle emitter types share these base properties:</p>
+<pre><code>ParQuota: 100                     // Max number of particles
+ParWidth: 0.100000                 // Particle width
+ParHeight: 0.100000                // Particle height
+Par3D: 1                           // 3D particles (0=2D billboards)
+ParFacing: 0                       // Facing direction
+ScaleNoOffset: 0                   // Don't offset scale
+NoWidScale: 0                      // Don't apply width scaling
+NoHeiScale: 0                      // Don't apply height scaling
+OrgPtWid: 0.500000                 // Origin width ratio
+OrgPtHei: 0.500000                 // Origin height ratio
+UseParUV: 0                        // Use particle UV (sprite sheet)
+UseGrndHeight: 0                   // Initialize at ground height
+StopEmitWhenFade: 0                // Stop emitting when fading out
+InitRandom: 0                      // Random initial texture frame
+</code></pre>
+
+<h3 id="light">12.4 Light &mdash; ID 130</h3>
+<pre><code>LightType: 1                       // 0=Point, 1=Spot, 2=Directional
+LightDiffuse: 255, 255, 255, 255  // Diffuse color (RGBA)
+LightSpecular: 255, 255, 255, 255 // Specular color
+LightAmbient: 0, 0, 0, 255        // Ambient color
+LightPosition: 0, 0, 0            // Light position (local)
+LightDirection: 0, -1, 0          // Light direction
+LightRange: 50.0                   // Attenuation range
+LightFalloff: 1.0                  // Falloff factor
+LightAtten0: 1.0                   // Constant attenuation
+LightAtten1: 0.0                   // Linear attenuation
+LightAtten2: 0.0                   // Quadratic attenuation
+LightTheta: 0.5                    // Inner cone angle (spot)
+LightPhi: 1.0                      // Outer cone angle (spot)
+</code></pre>
+
+<h3 id="ring">12.5 Ring &mdash; ID 140</h3>
+<pre><code>RingRadius: 5.000000              // Ring radius
+RingHeight: 1.000000              // Ring height (for 3D ring)
+RingPitch: 0.000000               // Ring pitch angle
+RingSects: 32                     // Number of segments
+RingNoRadScale: 0                 // Don't apply radius scaling
+RingNoHeiScale: 0                 // Don't apply height scaling
+RingOrgAtCenter: 1                // Origin at center
+</code></pre>
+
+<h3 id="lightning">12.6 Lightning / LightningEx / Bolt &mdash; IDs 150, 151, 152</h3>
+<pre><code>// Lightning (150)
+LnStartPos: 0, 0, 0               // Start position
+LnEndPos: 0, 10, 0                // End position
+LnSegs: 10                        // Number of segments
+LnNum: 3                          // Number of lightning bolts
+LnWavelength: 2.0                 // Wave length
+LnInterval: 0.5                   // Spacing between bolts
+LnWidthStart: 0.1                 // Width at start
+LnWidthEnd: 0.05                  // Width at end
+LnWidthMid: 0.08                  // Width at midpoint
+LnAlphaStart: 1.0                 // Alpha at start
+LnAlphaEnd: 0.5                   // Alpha at end
+LnAlphaMid: 0.8                   // Alpha at midpoint
+LnAmplitude: 2.0                  // Amplitude of displacement
+LnUseNormal: 0                    // Use surface normal
+LnNormal: 0, 1, 0                // Normal direction
+LnFilter: 0                       // Filter type
+LnWaveMove: 0                     // Enable wave movement
+LnWaveMoveSpeed: 1.0              // Wave movement speed
+LnFixWaveLength: 0                // Fix wavelength
+LnNumWaves: 1                     // Number of waves
+
+// LightningEx additional (152)
+LnExRenderSide: 0                 // Render side (0=both, 1=front, 2=back)
+LnExIsAppendly: 0                 // Appending generation
+LnExIsUseVertsLife: 0             // Use vertex lifetime
+LnExVertsLife: 1000               // Vertex lifetime (ms)
+LnExIsTailFadeOut: 0              // Tail fade out
+</code></pre>
+
+<h3 id="model">12.7 Model &mdash; ID 160</h3>
+<pre><code>ModelPath: models/explosion.m3d   // 3D model file path
+ModelActName: idle                 // Animation action name
+ModelLoops: 1                      // Animation loop count
+ModelAlphaCmp: 0                   // Alpha compare test
+ModelWriteZ: 1                     // Write to Z-buffer
+ModelUse3DCamera: 0                // Force 3D camera in 2D mode
+ModelFaceDir: 0                    // Face direction mode
+</code></pre>
+
+<h3 id="sound">12.8 Sound &mdash; ID 170</h3>
+<pre><code>SoundVer: 2                        // Sound version
+Force2D: 0                         // Force 2D sound (stereo)
+IsLoop: 0                          // Loop the sound
+MinDist: 12.000000                 // Minimum audible distance
+MaxDist: 50.000000                 // Maximum audible distance
+VolMin: 100                        // Minimum volume (0-100)
+VolMax: 100                        // Maximum volume (0-100)
+AbsoluteVolume: 0                  // Volume is absolute (not relative)
+PitchMin: 0.000000                 // Minimum pitch variation
+PitchMax: 0.000000                 // Maximum pitch variation
+FixSpeed: 0                        // Fix playback speed
+SilentHeader: 0                    // Silent period at start (ms)
+PercentStart: 0.0                  // Random start percentage
+Group: 0                           // Sound group ID
+SoundFile: effect.wav              // Sound file path
+</code></pre>
+
+<h3 id="container">12.9 Container (Sub-GFX) &mdash; ID 200</h3>
+<pre><code>ContainerGfxPath: effects/sparks.gfx   // Path to sub-GFX file
+ContainerOutColor: 0                     // Use outer color
+ContainerLoopFlag: 1                     // Loop sub-GFX
+ContainerGfxPlaySpeed: 1.0              // Sub-GFX play speed
+ContainerUseGfxScaleWhenDummy: 0         // Use parent scale when dummy
+</code></pre>
+
+<h3 id="grid-decal">12.10 Grid Decal &mdash; IDs 210, 211</h3>
+<pre><code>GridDecalWVNum: 10                  // Width vertex count
+GridDecalHVNum: 10                  // Height vertex count
+GridDecalGridSize: 1.0              // Grid cell size
+GridDecalZOffset: 0.0               // Z offset from surface
+GridDecalAffByScale: 1              // Affected by parent scale
+GridDecalRotFromView: 0             // Rotate from view
+GridDecalOffsetHeight: 0.0          // Offset height during render
+</code></pre>
+
+<h3 id="ecmodel">12.11 ECModel &mdash; ID 230</h3>
+<pre><code>ECModelPath: models/hero.ecm        // ECModel file path
+ECModelUseCasterSkin: 0             // Use caster's skin
+ECModelActName: attack              // Animation action name
+ECModelLdType: 0                    // Load type (0=Normal, 1=Custom ECM, 2=Custom Skin)
+ECModelUserCmd: ""                  // User command string
+</code></pre>
+
+<h3 id="ribbon">12.12 Ribbon &mdash; ID 240</h3>
+<pre><code>RibbonOrgPos1: 0, 0, 0             // Origin point 1
+RibbonOrgPos2: 0, 1, 0             // Origin point 2
+RibbonSegLife: 1000                 // Segment lifetime (ms)
+RibbonBind: ElementName             // Bind element name
+RibbonTimeToGravity: 0              // Time before gravity affects
+RibbonVelocityToGravity: 0          // Velocity for gravity
+RibbonGravity: 0, -9.8, 0          // Gravity vector
+RibbonVerticalNoise: 0.1            // Vertical noise amplitude
+RibbonVerticalSpeed: 1.0            // Vertical noise speed
+RibbonHorzAmplitude: 0.5            // Horizontal amplitude
+RibbonHorzSpeed: 1.0                // Horizontal speed
+RibbonXNoise: 0.1                   // X-axis noise
+RibbonZNoise: 0.1                   // Z-axis noise
+</code></pre>
+
+<h3 id="paraboloid">12.13 Paraboloid &mdash; ID 190</h3>
+<pre><code>ParabCoeff: 1.0                     // Paraboloid coefficient
+ParabHeight: 5.0                    // Paraboloid height
+</code></pre>
+
+<hr class="section-divider">
+
+<!-- 13. VERSION HISTORY -->
+<h2 id="version-history">13. Version History (V1-V150)</h2>
+
+<table>
+    <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
+    <tr><td>V2</td><td>2004-11-16</td><td>Emitter, scale has min/max values</td></tr>
+    <tr><td>V3</td><td>2004-11-18</td><td>Added control methods, noise scale</td></tr>
+    <tr><td>V4</td><td>2004-11-18</td><td>Added element bind</td></tr>
+    <tr><td>V5</td><td>2004-11-22</td><td>Added Bezier curve control</td></tr>
+    <tr><td>V6</td><td>2004-11-24</td><td>Lightning start/end width</td></tr>
+    <tr><td>V7</td><td>2004-11-25</td><td>Lightning alpha start/end</td></tr>
+    <tr><td>V8</td><td>2004-12-30</td><td>Z-test enable/disable</td></tr>
+    <tr><td>V9</td><td>2005-01-12</td><td>Texture animation for all elements</td></tr>
+    <tr><td>V16</td><td>2005-03-07</td><td>Default scale</td></tr>
+    <tr><td>V17</td><td>2005-03-07</td><td>Default play speed</td></tr>
+    <tr><td>V18</td><td>2005-03-09</td><td>Alpha control, trail bind</td></tr>
+    <tr><td>V22</td><td>2005-04-15</td><td>Match ground normal</td></tr>
+    <tr><td>V24</td><td>2005-04-21</td><td>Camera shake control</td></tr>
+    <tr><td>V25</td><td>2005-04-28</td><td>AABB bounding box</td></tr>
+    <tr><td>V27</td><td>2005-05-21</td><td>Fade by distance</td></tr>
+    <tr><td>V32</td><td>2005-08-11</td><td>Dummy element</td></tr>
+    <tr><td>V34</td><td>2005-11-03</td><td>Texture tile mode</td></tr>
+    <tr><td>V40</td><td>2006-03-29</td><td>GFX Container element type</td></tr>
+    <tr><td>V45</td><td>2007-01-30</td><td>Render layer system</td></tr>
+    <tr><td>V50</td><td>2007-06-07</td><td>2D render mode</td></tr>
+    <tr><td>V53</td><td>2007-10-15</td><td>Using AABB flag</td></tr>
+    <tr><td>V59</td><td>2008-08-27</td><td>GridDecalEx element</td></tr>
+    <tr><td>V63</td><td>2008-10-08</td><td>GFXPhysElement, .gphy data</td></tr>
+    <tr><td>V67</td><td>2008-12-12</td><td>LightningEx element</td></tr>
+    <tr><td>V83</td><td>2010-01-15</td><td>GFXECModel element</td></tr>
+    <tr><td>V89</td><td>2010-05-26</td><td>Angelica3 GFX flag</td></tr>
+    <tr><td>V91</td><td>2011-02-14</td><td>A3DShader support</td></tr>
+    <tr><td>V103</td><td>2012-04-09</td><td>Ribbon element</td></tr>
+    <tr><td>V150</td><td>Current</td><td>Latest version (Angelica2)</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- 14. UNITY INTEGRATION -->
+<h2 id="unity-integration">14. Notes for Unity Integration</h2>
+
+<div class="note">
+    <strong>Key Implementation Points for a Unity Plugin:</strong>
+    <ul style="margin-top:10px">
+        <li><strong>Parse text format first</strong> &mdash; it's human-readable and easier to debug. Binary format follows the exact same field order.</li>
+        <li><strong>Version checking</strong> &mdash; always check <code>Version: N</code> before reading version-gated fields. Missing fields = default values.</li>
+        <li><strong>Element type dispatch</strong> &mdash; use the <code>GFXELEMENTID</code> to determine which subclass properties to parse after the base element data.</li>
+        <li><strong>KeyPoint interpolation</strong> &mdash; implement <code>enumInterpAll</code> (SLERP for quaternions, LERP for position/color/scale) as the primary mode.</li>
+        <li><strong>Control methods</strong> &mdash; each KeyPoint can have multiple modifiers. Process them in order during tick.</li>
+        <li><strong>Bind system</strong> &mdash; elements can follow other elements' transforms via the <code>BindEle</code> name reference.</li>
+        <li><strong>RepeatCount = -1</strong> means infinite loop; positive values loop that many times.</li>
+        <li><strong>AABB</strong> &mdash; stored as min/max vectors, used for frustum culling. Scale by the effect's scale factor.</li>
+        <li><strong>Texture paths</strong> &mdash; relative to <code>Gfx/Textures/</code> directory.</li>
+        <li><strong>Container elements</strong> &mdash; reference other .gfx files recursively.</li>
+        <li><strong>Color format</strong> &mdash; RGBA stored as 4 separate ints in text, or as a 32-bit ABGR value in binary.</li>
+        <li><strong>Quaternion format</strong> &mdash; <code>x, y, z, w</code> order in text files.</li>
+        <li><strong>Time units</strong> &mdash; all time values are in <strong>milliseconds</strong>.</li>
+    </ul>
+</div>
+
+<div class="warning">
+    <strong>Gotchas:</strong>
+    <ul style="margin-top:10px">
+        <li>The <code>DedaultScale</code> field has a typo (should be "Default") &mdash; keep the typo for compatibility.</li>
+        <li>Binary strings are length-prefixed DWORD + chars (no null terminator in some cases).</li>
+        <li>AABB is stored as Mins/Maxs (center+extent is computed at load time).</li>
+        <li>Shake camera noise is a full <code>A3DGFXCtrlNoiseBase</code> serialized inline.</li>
+        <li>Elements with <code>BindEle</code> are saved AFTER unbound elements in the file.</li>
+        <li>PhysX elements need a separate .gphy file &mdash; without it, those elements won't work.</li>
+    </ul>
+</div>
+
+<hr class="section-divider">
+
+<div style="text-align:center; padding:40px 0; color:var(--text-muted)">
+    <p>GFX Format Documentation &mdash; Generated from Angelica Engine Source Code Analysis</p>
+    <p style="font-size:0.85em; margin-top:8px">Source paths: <code>Common/GfxCommon/A3DGFXEx.h/.cpp</code>, <code>A3DGFXElement.h/.cpp</code>, <code>A3DGFXKeyPoint.h</code>, <code>A3DGFXEditorInterface.h</code></p>
+</div>
+
+</div>
+</body>
+</html>
