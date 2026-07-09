@@ -16,7 +16,7 @@ from typing import BinaryIO, Dict, Iterable, List, Optional, Sequence, Tuple
 
 try:
     import bpy
-    from bpy.props import BoolProperty, EnumProperty, StringProperty
+    from bpy.props import BoolProperty, CollectionProperty, EnumProperty, StringProperty
     from bpy_extras.io_utils import ExportHelper, ImportHelper
 except ImportError:
     bpy = None
@@ -1038,7 +1038,12 @@ def import_bmd(context, filepath: str, settings: BMDExportSettings) -> Dict[str,
         obj = bpy.data.objects.new(mesh_name, blender_mesh)
         collection.objects.link(obj)
 
+        # Store the texture path on the imported mesh object as a custom property.
+        # This preserves the BMD texture path text for later export or inspection.
         if mesh_data.texture:
+            obj["bmd_texture"] = str(mesh_data.texture)
+            blender_mesh["bmd_texture"] = str(mesh_data.texture)
+
             material_name = _path_filename(mesh_data.texture) or f"{mesh_name}_mat"
             material = bpy.data.materials.get(material_name) or bpy.data.materials.new(material_name)
             material.use_nodes = True
@@ -1232,6 +1237,8 @@ if bpy is not None:
 
         filename_ext = ".bmd"
         filter_glob: StringProperty(default="*.bmd", options={"HIDDEN"})
+        files: CollectionProperty(type=bpy.types.OperatorFileListElement)
+        directory: StringProperty(subtype="DIR_PATH")
 
         texture_search_folder: StringProperty(
             name="Texture Search Folder",
@@ -1258,15 +1265,34 @@ if bpy is not None:
             settings = BMDExportSettings(
                 texture_search_folder=bpy.path.abspath(self.texture_search_folder) if self.texture_search_folder else "",
             )
-            try:
-                stats = import_bmd(context, self.filepath, settings)
-            except Exception as exc:
-                self.report({"ERROR"}, str(exc))
+
+            directory = getattr(self, "directory", "") or os.path.dirname(self.filepath or "")
+            filepaths = [os.path.join(directory, entry.name) for entry in self.files] if len(self.files) > 0 else []
+            if not filepaths and self.filepath:
+                filepaths = [self.filepath]
+
+            if not filepaths:
+                self.report({"ERROR"}, "No BMD file selected for import")
                 return {"CANCELLED"}
+
+            total_meshes = 0
+            total_vertices = 0
+            total_faces = 0
+
+            for filepath in filepaths:
+                try:
+                    stats = import_bmd(context, filepath, settings)
+                except Exception as exc:
+                    self.report({"ERROR"}, f"Failed to import {filepath}: {exc}")
+                    return {"CANCELLED"}
+
+                total_meshes += stats.get("meshes", 0)
+                total_vertices += stats.get("vertices", 0)
+                total_faces += stats.get("faces", 0)
 
             self.report(
                 {"INFO"},
-                f"Imported {stats['meshes']} BMD meshes, {stats['vertices']} verts, {stats['faces']} faces",
+                f"Imported {total_meshes} meshes, {total_vertices} verts, {total_faces} faces from {len(filepaths)} file(s)",
             )
             return {"FINISHED"}
 
