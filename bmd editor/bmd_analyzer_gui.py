@@ -490,6 +490,63 @@ def build_analysis_window(model, file_path):
             dpg.add_text(f"  Collision Hulls:   {model.collision.num_hull}")
 
 
+def get_bmd_files(folder_path):
+    if not folder_path or not os.path.isdir(folder_path):
+        return []
+
+    extensions = (".bmd", ".lmd")
+    files = []
+    for entry in os.listdir(folder_path):
+        full_path = os.path.join(folder_path, entry)
+        if os.path.isfile(full_path) and entry.lower().endswith(extensions):
+            files.append(full_path)
+    return sorted(files)
+
+
+def refresh_bmd_file_list(folder_path):
+    file_paths = get_bmd_files(folder_path)
+    file_names = [os.path.basename(path) for path in file_paths]
+
+    if file_paths:
+        dpg.configure_item("file_combo", items=file_names, default_value=file_names[0])
+        dpg.set_value("file_status", f"Found {len(file_paths)} file(s)")
+    else:
+        dpg.configure_item("file_combo", items=[], default_value="")
+        dpg.set_value("file_status", "No .bmd/.lmd files found in this folder")
+
+    dpg.set_value("folder_path", folder_path or "")
+
+
+def load_selected_bmd_file():
+    folder_path = dpg.get_value("folder_path")
+    selected_name = dpg.get_value("file_combo")
+
+    if not folder_path or not selected_name:
+        return
+
+    file_path = os.path.join(folder_path, selected_name)
+    if not os.path.isfile(file_path):
+        return
+
+    try:
+        model = parse_bmd(file_path)
+        build_analysis_window(model, file_path)
+    except Exception as e:
+        children = dpg.get_item_children("analysis_group", 1)
+        if children:
+            for child in children:
+                dpg.delete_item(child)
+        with dpg.group(parent="analysis_group"):
+            dpg.add_text(f"Error parsing file: {e}", color=(255, 108, 108))
+
+
+def select_folder_callback(sender, app_data):
+    folder_path = app_data.get("file_path_name")
+    if folder_path and os.path.isdir(folder_path):
+        dpg.set_value("folder_path", folder_path)
+        refresh_bmd_file_list(folder_path)
+
+
 def main():
     dpg.create_context()
 
@@ -509,38 +566,49 @@ def main():
 
     dpg.bind_theme(global_theme)
 
-    # File dialog
+    # File dialogs
     with dpg.file_dialog(directory_selector=False, show=False, callback=open_file_callback,
                          id="file_dialog", width=700, height=400, modal=True):
         dpg.add_file_extension(".bmd", color=(108, 140, 255))
         dpg.add_file_extension(".lmd", color=(108, 140, 255))
         dpg.add_file_extension(".*")
 
+    with dpg.file_dialog(directory_selector=True, show=False, callback=select_folder_callback,
+                         id="folder_dialog", width=700, height=400, modal=True):
+        dpg.add_file_extension(".*")
+
     # Main window
-    with dpg.window(tag="main_window", label="BMD File Analyzer", width=900, height=700,
+    with dpg.window(tag="main_window", label="BMD File Analyzer", width=950, height=760,
                      on_close=lambda: dpg.stop_dearpygui()):
         with dpg.group():
             dpg.add_text("BMD File Analyzer - Angelica2 Engine", color=(108, 140, 255))
-            dpg.add_text("Select a .bmd file to analyze its structure and contents.", color=(136, 136, 152))
+            dpg.add_text("Choose a folder with .bmd/.lmd files and then pick the needed file from the list.",
+                         color=(136, 136, 152))
             dpg.add_spacer(height=8)
 
             with dpg.group(horizontal=True):
-                dpg.add_button(label="Open BMD File", callback=lambda: dpg.show_item("file_dialog"),
-                               width=180, height=35)
-                dpg.add_button(label="withCollision.bmd",
-                               callback=lambda: quick_load(os.path.join(r"B:\Git\Source-Cliente153\bmd editor", "withCollision.bmd")),
-                               width=180, height=35)
-                dpg.add_button(label="withoutCollisionTest.bmd",
-                               callback=lambda: quick_load(os.path.join(r"B:\Git\Source-Cliente153\bmd editor", "withoutCollisionTest.bmd")),
-                               width=230, height=35)
+                dpg.add_input_text(tag="folder_path", width=540, hint="Folder with BMD files",
+                                   default_value=os.path.abspath(os.getcwd()))
+                dpg.add_button(label="Browse Folder", callback=lambda: dpg.show_item("folder_dialog"),
+                               width=140, height=35)
+                dpg.add_button(label="Scan Folder", callback=lambda: refresh_bmd_file_list(dpg.get_value("folder_path")),
+                               width=120, height=35)
 
+            dpg.add_spacer(height=6)
+            dpg.add_text("Available files:", color=(108, 140, 255))
+            dpg.add_combo(tag="file_combo", items=[], width=700, callback=lambda: load_selected_bmd_file())
+            dpg.add_text(tag="file_status", default_value="No folder selected", color=(136, 136, 152))
             dpg.add_spacer(height=8)
             dpg.add_separator()
             dpg.add_spacer(height=4)
 
             with dpg.child_window(tag="analysis_group", autosize_x=True, autosize_y=True):
-                dpg.add_text("No file loaded. Click 'Open BMD File' to begin.",
+                dpg.add_text("No file loaded. Choose a folder and select a file to begin.",
                              color=(136, 136, 152))
+
+    initial_folder = os.path.abspath(os.getcwd())
+    dpg.set_value("folder_path", initial_folder)
+    refresh_bmd_file_list(initial_folder)
 
     dpg.create_viewport(title="BMD Analyzer", width=920, height=720)
     dpg.setup_dearpygui()

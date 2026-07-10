@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMD Collision System Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        h3 {
+            color: #2980b9;
+        }
+        .code-block {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            margin: 10px 0;
+        }
+        .highlight {
+            background-color: #fff3cd;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border-left: 4px solid #3498db;
+            background-color: #f8f9fa;
+        }
+        .file-info {
+            background-color: #e8f4f8;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-style: italic;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .note {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Аналіз системи колізій BMD файлу</h1>
+        
+        <div class="section">
+            <h2>1. Загальна архітектура системи колізій</h2>
+            <p>Движок гри Angelica2 використовує дві основні структури для обробки колізій:</p>
+            
+            <h3>1.1. ESP (Extended Spatial Partitioning)</h3>
+            <ul>
+                <li>Просторове розбиття на візуальні листки (leaves)</li>
+                <li>Використовує 3DDDA алгоритм для трасування променів</li>
+                <li>Ідеально для статичних сцен</li>
+            </ul>
+            
+            <h3>1.2. KD-Tree (K-Dimensional Tree)</h3>
+            <ul>
+                <li>Бінарне дерево розбиття простору</li>
+                <li>Рекурсивне трасування по дереву</li>
+                <li>Більш ефективний для складних сцен</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>2. Структура файлу колізії</h2>
+            
+            <div class="file-info">
+                <strong>Файли:</strong> .esp (ESP) та .kdt (KD-Tree)
+            </div>
+
+            <h3>2.1. Структура ESP файлу</h3>
+            <div class="code-block">
+struct ESPFILEHEADER {
+    DWORD dwIdentify;    // Ідентифікатор: 'AESP' (0x41455350)
+    DWORD dwVersion;     // Версія: 5
+    int   iNumLump;      // Кількість блоків даних
+    BYTE  aReserved[60]; // Зарезервовано
+};
+
+enum ESP_LUMPS {
+    EFLUMP_LEAVES = 0,    // Листки (просторові комірки)
+    EFLUMP_PLANES,        // Плоскості
+    EFLUMP_VERTICES,      // Вершини
+    EFLUMP_LEAFSIDES,     // Посилання на сторони в листках
+    EFLUMP_SIDES,         // Сторони (трикутники/чотирикутники)
+    EFLUMP_WORLDINFO,     // Інформація про світ
+    EFLUMP_BRUSHES,       // Кисті (об'єми)
+    EFLUMP_BRUSHPLANES,   // Плоскості кистей
+    NUM_ESPLUMP
+};
+            </div>
+
+            <h3>2.2. Структура KD-Tree файлу</h3>
+            <div class="code-block">
+struct KDTFILEHEADER {
+    DWORD dwIdentify;    // Ідентифікатор: 'AKDT' (0x414B4454)
+    DWORD dwVersion;     // Версія: 2
+    int   iNumLump;      // Кількість блоків даних
+    BYTE  aReserved[60]; // Зарезервовано
+};
+
+enum KDT_LUMPS {
+    KDTLUMP_VERTICES = 0, // Вершини
+    KDTLUMP_PLANES,       // Плоскості
+    KDTLUMP_NODES,        // Вузли дерева
+    KDTLUMP_LEAFSIDES,    // Посилання на сторони
+    KDTLUMP_SIDES,        // Сторони
+    KDTLUMP_BRUSHES,      // Кисті
+    KDTLUMP_BRUSHPLANES,  // Плоскості кистей
+    NUM_KDTLUMP
+};
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>3. Основні структури даних</h2>
+            
+            <h3>3.1. Плоскість (Plane)</h3>
+            <div class="code-block">
+struct EFPLANE {
+    FLOAT vNormal[3];  // Нормаль плоскості (x, y, z)
+    FLOAT fDist;       // Відстань від початку координат
+};
+
+// Формула плоскості: n·p = d
+// де n - нормаль, p - точка на плоскості, d - відстань
+            </div>
+
+            <h3>3.2. Сторона (Side)</h3>
+            <div class="code-block">
+struct EFSIDE {
+    LONG  lPlane;      // Індекс плоскості
+    LONG  lFirstVert;  // Перша вершина в масиві вершин
+    LONG  lNumVert;    // Кількість вершин
+    DWORD dwMeshProps; // Властивості сітки
+    int   iMtlType;    // Тип матеріалу
+    LONG  lBrush;      // Індекс кисті
+};
+
+// Кожна сторона - це полігон (трикутник або чотирикутник)
+// який є елементом колізії
+            </div>
+
+            <h3>3.3. Листок (Leaf) - ESP</h3>
+            <div class="code-block">
+struct EFLEAF {
+    LONG lFirstLeafSide;  // Перше посилання на сторону
+    LONG lNumLeafSides;   // Кількість сторін у листку
+};
+
+// Листок - це просторова комірка (воксель)
+// містить список сторін, що знаходяться в ній
+            </div>
+
+            <h3>3.4. Вузол (Node) - KD-Tree</h3>
+            <div class="code-block">
+struct KDTFNODE {
+    int   iPlane;        // Індекс розділювальної площини (-1 = листок)
+    int   iParent;       // Батьківський вузол
+    int   aChildren[2];  // Дочірні вузли [0] - ліворуч, [1] - праворуч
+    int   iFirstSide;    // Перша сторона в списку
+    int   iNumSide;      // Кількість сторін
+    float vMins[3];      // AABB мінімуми
+    float vMaxs[3];      // AABB максимуми
+};
+
+// Вузол дерева містить розділювальну площину
+// яка діить простір на дві підмножини
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>4. Процес створення колізії</h2>
+            
+            <h3>4.1. Завантаження сцени</h3>
+            <div class="code-block">
+// З Side.cpp
+void _CreateSides() {
+    // 1. Завантажуємо всі меші зі сцени
+    for (кожен меш в сцені) {
+        // 2. Перевіряємо властивості меша
+        if (меш.мультіфрейм || меш.pickthrough) continue;
+        
+        // 3. Створюємо сторони з трикутників
+        _CreateSidesFromTriangles(
+            кількість_вершин,
+            кількість_індексів,
+            вершини,
+            індекси,
+            властивості_меша
+        );
+    }
+}
+            </div>
+
+            <h3>4.2. Об'єднання трикутників</h3>
+            <div class="code-block">
+// З Side.cpp
+bool _CreateSidesFromTriangles(...) {
+    if (g_Configs.bMergeSide && iNumIndex >= 6) {
+        // Спроба об'єднати два трикутники в чотирикутник
+        // Якщо вони:
+        // - лежать в одній площині
+        // - мають спільний ребро
+        // - утворюють опуклий чотирикутник
+        
+        // Об'єднання зменшує кількість полігонів
+        // покращуючи продуктивність
+    }
+}
+            </div>
+
+            <h3>4.3. Створення ESP світу</h3>
+            <div class="code-block">
+// З ESP_Leaf.cpp
+bool _CreateESPWorld() {
+    // 1. Обчислюємо AABB всієї сцени
+    ClearBound(g_ESPWorld.vMins, g_ESPWorld.vMaxs);
+    for (кожна_сторона) {
+        AddPointToBound(g_ESPWorld.vMins, g_ESPWorld.vMaxs, вершина);
+    }
+    
+    // 2. Розширюємо границі для запобігання помилок
+    int iDefLeafSize = g_Configs.iESPLeafSize; // За замовчуванням 20
+    float fBorderErr = (float)iDefLeafSize;
+    
+    // 3. Вирівнюємо границі по розміру листка
+    for (int i = 0; i < 3; i++) {
+        g_ESPWorld.vAlignMins[i] = floor((vMins[i] - fBorderErr) / iDefLeafSize) * iDefLeafSize;
+        g_ESPWorld.vAlignMaxs[i] = ceil((vMaxs[i] + fBorderErr) / iDefLeafSize) * iDefLeafSize;
+        g_ESPWorld.vLength[i] = iDefLeafSize;
+        g_ESPWorld.vSize[i] = (int)((vAlignMaxs[i] - vAlignMins[i]) / iDefLeafSize + 0.5f);
+    }
+    
+    // 4. Виділяємо пам'ять для листків
+    int iNumLeaf = vSize[0] * vSize[1] * vSize[2];
+    g_ESPWorld.aLeaves = new s_ESPLEAF[iNumLeaf];
+    
+    // 5. Ініціалізуємо листки
+    _InitializeLeaves();
+}
+            </div>
+
+            <h3>4.4. Фільтрація сторін в листки</h3>
+            <div class="code-block">
+// З ESP_Leaf.cpp
+void _FilterSidesIntoLeaves() {
+    for (кожна_сторона) {
+        // Обчислюємо AABB сторони
+        for (кожна_вершина_сторони) {
+            AddPointToBound(vMins, vMaxs, вершина);
+        }
+        
+        // Знаходимо діапазон листків, що перетинаються з AABB
+        for (x = min_x до max_x) {
+            for (y = min_y до max_y) {
+                for (z = min_z до max_z) {
+                    // Додаємо посилання на сторону в листок
+                    int iLeaf = x + y * vSize[0] + z * vSize[0] * vSize[1];
+                    AddSideRefToLeaf(iLeaf, iSide);
+                }
+            }
+        }
+    }
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>5. Алгоритми трасування</h2>
+            
+            <h3>5.1. Ray Tracing (Трасування променя)</h3>
+            <div class="code-block">
+// З A3DESP.cpp
+bool A3DESP::RayTrace(RAYTRACERT* pTrace, 
+                      const A3DVECTOR3& vStart, 
+                      const A3DVECTOR3& vVelocity, 
+                      FLOAT fTime) {
+    // 1. Ініціалізація даних трасування
+    m_Ray.vStart = vStart;
+    m_Ray.vEnd = vStart + vVelocity * fTime;
+    m_Ray.vDir = m_Ray.vEnd - m_Ray.vStart;
+    m_Ray.fFraction = 1.0f;
+    
+    // 2. Перевірка чи промінь аксіальний
+    if (vDir.x == 0.0f && vDir.z == 0.0f)
+        m_Ray.iAxial = 1; // Y-аксіальний
+    else if (vDir.y == 0.0f && vDir.z == 0.0f)
+        m_Ray.iAxial = 0; // X-аксіальний
+    // ... інші випадки
+    
+    // 3. Трасування в світ
+    return RayToWorld();
+}
+            </div>
+
+            <h3>5.2. 3DDDA Алгоритм (ESP)</h3>
+            <div class="code-block">
+// З A3DESP.cpp
+void A3DESP::Init3DDDA(A3DVECTOR3& v0, A3DVECTOR3& v1) {
+    // Ініціалізація 3D Digital Differential Analyzer
+    // Визначення початкового та кінцевого вокселів
+    
+    for (int i = 0; i < 3; i++) {
+        vStart[i] = (int)((v0.m[i] - vAlignMins.m[i]) * vInvLength.m[i]);
+        vEnd[i] = (int)((v1.m[i] - vAlignMins.m[i]) * vInvLength.m[i]);
+        
+        // Обчислення кроків та помилок
+        if (vDelta.m[i] < 0.0f) {
+            s[i] = -1;
+            vSteps[i] = vStart[i] - vEnd[i];
+            d[i] = v0.m[i] - (vAlignMins.m[i] + vStart[i] * vLength[i]);
+        } else {
+            s[i] = 1;
+            vSteps[i] = vEnd[i] - vStart[i];
+            d[i] = vAlignMins.m[i] + (vStart[i] + 1) * vLength[i] - v0.m[i];
+        }
+    }
+    
+    // Визначення головної осі (з найбільшим кроком)
+    if (vAbs.x > vAbs.y && vAbs.x > vAbs.z)
+        iMajor = 0; // X головна
+    // ... інші випадки
+}
+            </div>
+
+            <h3>5.3. KD-Tree Recursive Tracing</h3>
+            <div class="code-block">
+// З A3DKDTree.cpp
+void A3DKDTree::RecursiveTraceCheck(NODE* pNode, float f1, float f2, 
+                                    const A3DVECTOR3& vP1, const A3DVECTOR3& vP2) {
+    // 1. Якщо вже знайшли ближче зіткнення - повертаємось
+    if (m_Trace.fHitFrac <= f1) return;
+    
+    // 2. Якщо це листок (немає площини розбиття)
+    if (!pNode->pPlane) {
+        switch (m_Trace.iTrace) {
+            case TRACE_RAY:    TraceRayInLeaf(pNode);    break;
+            case TRACE_AABB:   TraceAABBInLeaf(pNode);   break;
+            case TRACE_SPHERE: TraceSphereInLeaf(pNode); break;
+        }
+        return;
+    }
+    
+    // 3. Знаходимо відстані до розділювальної площини
+    float t1 = vP1.m[pPlane->byType] - pPlane->fDist;
+    float t2 = vP2.m[pPlane->byType] - pPlane->fDist;
+    
+    // 4. Рекурсивно перевіряємо дочірні вузли
+    if (t1 >= fOffset && t2 >= fOffset) {
+        RecursiveTraceCheck(pNode->aChildren[0], f1, f2, vP1, vP2);
+    } else if (t1 < -fOffset && t2 < -fOffset) {
+        RecursiveTraceCheck(pNode->aChildren[1], f1, f2, vP1, vP2);
+    } else {
+        // Промінь перетинає площину - перевіряємо обидва боки
+        float fFrac1, fFrac2;
+        // Обчислення коефіцієнтів перетину
+        RecursiveTraceCheck(pNode->aChildren[iSide], f1, fMid, vP1, vMid);
+        RecursiveTraceCheck(pNode->aChildren[iSide^1], fMid, f2, vMid, vP2);
+    }
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>6. Типи колізій</h2>
+            
+            <h3>6.1. Ray-Side Collision</h3>
+            <div class="code-block">
+// З A3DKDTree.cpp
+bool A3DKDTree::RayToSide(SIDE* pSide) {
+    // 1. Перевірка AABB сторони з променем
+    if (!RayToAABB(pSide->vMins, pSide->vMaxs)) return false;
+    
+    // 2. Тестування перетину з трикутником
+    for (int i = 0; i < pSide->iNumVert - 2; i++) {
+        if (CLS_RayToTriangle(
+            m_Trace.vStart, m_Trace.vDelta,
+            pSide->aVerts[0], pSide->aVerts[i+1], pSide->aVerts[i+2],
+            vPoint, pSide->MeshProps.Get2SidesFlag(), &fFraction)) {
+            
+            // 3. Оновлення результату, якщо знайшли ближче зіткнення
+            if (fFraction < m_Trace.fHitFrac) {
+                m_Trace.fHitFrac = fFraction;
+                m_Trace.fFraction = fFraction;
+                m_Trace.pSide = pSide;
+                m_Trace.vNormal = pSide->pPlane->vNormal;
+                m_Trace.vPoint = vPoint;
+            }
+        }
+    }
+    return true;
+}
+            </div>
+
+            <h3>6.2. AABB-Side Collision</h3>
+            <div class="code-block">
+// З A3DESP.cpp
+bool A3DESP::AABBMoveToSide(ESPSIDE* pSide) {
+    // Використовується для руху об'єктів (гравців, NPC)
+    // 1. Розширення AABB на радіус об'єкта
+    // 2. Тестування перетину з кожною гранню сторони
+    // 3. Обчислення максимальної відстані руху
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>7. Оптимізації</h2>
+            
+            <h3>7.1. Просторове розбиття</h3>
+            <ul>
+                <li><strong>ESP:</strong> Рівномірне розбиття на вокселі</li>
+                <li><strong>KD-Tree:</strong> Адаптивне розбиття по площинах</li>
+            </ul>
+
+            <h3>7.2. Кешування</h3>
+            <div class="code-block">
+// Використання dwTraceCnt для уникнення повторної перевірки
+struct ESPSIDE {
+    DWORD dwTraceCnt; // Лічильник трасування
+};
+
+// Перевірка:
+if (pSide->dwTraceCnt == m_dwTraceCnt) 
+    continue; // Вже перевірено в цьому кадрі
+            </div>
+
+            <h3>7.3. Аксіальне трасування</h3>
+            <ul>
+                <li>Для променів, паралельних осям</li>
+                <li>Спрощений алгоритм 3DDDA</li>
+                <li>Швидше на ~30%</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>8. Властивості матеріалів</h2>
+            
+            <div class="code-block">
+struct A3DMESHPROP {
+    DWORD dwProps;
+    
+    // Прапорці властивостей:
+    // Bit 0: TwoSides - двостороння колізія
+    // Bit 1: NoMark - не залишати слідів
+    // Bit 2: PickThrough - пропускати при виборі
+    // Bit 3: NoCollide - вимкнена колізія
+    
+    bool Get2SidesFlag() { return dwProps & 0x01; }
+    bool GetNoMarkFlag() { return dwProps & 0x02; }
+    bool GetPickThroughFlag() { return dwProps & 0x04; }
+};
+
+enum A3DMATERIALTYPE {
+    MAT_NONE = 0,
+    MAT_METAL,      // Метал - дзвінкий звук
+    MAT_WOOD,       // Дерево - глухий звук
+    MAT_STONE,      // Камінь - важкий звук
+    MAT_WATER,      // Вода - звук крапель
+    MAT_EARTH,      // Земля - м'який звук
+    // ... інші типи
+};
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>9. Brush (Кисті)</h3>
+            
+            <div class="code-block">
+struct EFBRUSH {
+    LONG lFirstPlane;  // Перша плоскість
+    LONG lNumPlane;    // Кількість площин
+};
+
+// Кисть - це опуклий об'єм, що утворюється
+// перетином напівпросторів (півплощин)
+
+// Приклад куба:
+// 6 площин (кожна грань куба)
+// Кожна площина визначає одне ребро об'єму
+
+// Використання кистей:
+// 1. Точна колізія для складних об'єктів
+// 2. Визначення матеріалу поверхні
+// 3. Фізичні властивості (тертя, відскок)
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>10. Процес імпорту в Blender</h2>
+            
+            <div class="note">
+                <strong>Примітка:</strong> Базуючись на аналізі вихідного коду, процес імпорту колізії в Blender включає:
+            </div>
+            
+            <h3>10.1. Читання файлу</h3>
+            <ol>
+                <li>Зчитування заголовка файлу</li>
+                <li>Визначення типу (ESP або KD-Tree)</li>
+                <li>Читання блоків даних (lumps)</li>
+            </ol>
+
+            <h3>10.2. Конвертація даних</h3>
+            <ol>
+                <li>Плоскості → Mesh faces</li>
+                <li>Вершини → Mesh vertices</li>
+                <li>Сторони → Mesh polygons</li>
+                <li>Кисті → Boolean об'єкти або меші</li>
+            </ol>
+
+            <h3>10.3. Створення об'єктів</h3>
+            <ol>
+                <li>Основна колізія (ліва кнопка миші)</li>
+                <li>Детальна колізія (кисті)</li>
+                <li>Маркери (точки для подій)</li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>11. Висновки</h2>
+            
+            <p>Система колізій BMD файлу реалізована на основі:</p>
+            <ul>
+                <li><strong>ESP</strong> - для простих сцен, швидке трасування променів</li>
+                <li><strong>KD-Tree</strong> - для складних сцен, адаптивне розбиття</li>
+                <li><strong>Brush</strong> - для точної колізії складних об'єктів</li>
+            </ul>
+            
+            <p>Основні переваги:</p>
+            <ul>
+                <li>Висока продуктивність завдяки просторовому розбиттю</li>
+                <li>Підтримка різних типів колізій (промінь, AABB, сфера)</li>
+                <li>Гнучка система властивостей матеріалів</li>
+                <li>Оптимізація для ігрових сцен</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Аналіз файлу CollisionFile.bmd</h2>
+            
+            <div class="note">
+                <strong>Важливо:</strong> Файл CollisionFile.bmd насправді є MOX файлом (MOX Binary), а не ESP або KD-Tree файлом.
+            </div>
+
+            <h3>Структура файлу</h3>
+            <div class="code-block">
+// Заголовок файлу (зчитано з бінарного аналізу)
+Offset 0x00: "MOXB" - Магічний номер MOX Binary (0x4D4F5842)
+Offset 0x04: Версія файлу (0x00000002 = версія 2)
+Offset 0x08: Розмір файлу (0x1000001F = ~268 MB)
+
+// Структура заголовку MOX файлу:
+struct MOXFILEHEADER {
+    DWORD dwIdentify;    // "MOXB" = 0x4D4F5842
+    DWORD dwVersion;     // Версія формату
+    DWORD dwFileSize;    // Розмір файлу
+};
+            </div>
+
+            <h3>Знайдені дані в файлі</h3>
+            <table>
+                <tr>
+                    <th>Зміст</th>
+                    <th>Офсет</th>
+                    <th>Опис</th>
+                </tr>
+                <tr>
+                    <td>Box01</td>
+                    <td>0x0040</td>
+                    <td>Назва першого фрейму (меша)</td>
+                </tr>
+                <tr>
+                    <td>Building\textures\h\860.dds</td>
+                    <td>0x0080</td>
+                    <td>Шлях до текстури</td>
+                </tr>
+                <tr>
+                    <td>Box367</td>
+                    <td>0x38F8</td>
+                    <td>Назва іншого фрейму</td>
+                </tr>
+                <tr>
+                    <td>Building\textures\h\861.dds</td>
+                    <td>0x3938</td>
+                    <td>Шлях до текстури</td>
+                </tr>
+                <tr>
+                    <td>Object01</td>
+                    <td>0x3B30</td>
+                    <td>Назва об'єкта</td>
+                </tr>
+                <tr>
+                    <td>Building\textures\h\862.dds</td>
+                    <td>0x3B70</td>
+                    <td>Шлях до текстури</td>
+                </tr>
+                <tr>
+                    <td>Plane01</td>
+                    <td>0x3E68</td>
+                    <td>Назва площини (колізії)</td>
+                </tr>
+                <tr>
+                    <td>Building\textures\g\7ac.dds</td>
+                    <td>0x3EA8</td>
+                    <td>Шлях до текстури</td>
+                </tr>
+            </table>
+
+            <h3>Як реалізована колізія</h3>
+            <p>На основі аналізу файлу та вихідного коду движка, колізія в CollisionFile.bmd реалізована наступним чином:</p>
+            
+            <ol>
+                <li><strong>Кожен меш (Box01, Box367, Object01) містить:</strong>
+                    <ul>
+                        <li>Масив вершин (A3DVERTEX)</li>
+                        <li>Масив індексів (WORD indices)</li>
+                        <li>Властивості меша (A3DMESHPROP)</li>
+                        <li>Текстуру</li>
+                    </ul>
+                </li>
+                
+                <li><strong>Властивості колізії зберігаються в A3DMESHPROP:</strong>
+                    <div class="code-block">
+// Кожен меш має властивості, що визначають поведінку колізії
+struct A3DMESHPROP {
+    DWORD dwProps;           // Прапорці властивостей
+    A3DMATERIALTYPE MtlType; // Тип матеріалу для звуку/ефектів
+};
+
+// Прапорці властивостей:
+FG_2SIDES        = 0x0001  // Двостороння колізія
+FG_SHOOTTHROUGH  = 0x0002  // Пропускає кулі
+FG_NOMARK        = 0x0004  // Не залишає слідів
+FG_PICKTHROUGH   = 0x0008  // Пропускає при виборі
+FG_ONGROUND      = 0x0010  // Знаходиться на землі
+FG_BSPPVS        = 0x0020  // Використовується для PVS
+FG_NOTRENDER     = 0x0040  // Не рендериться
+FG_WALKIGNORE    = 0x0080  // Ігнорується при ходьбі
+FG_NOLYFORWALK   = 0x0100  // Тільки для ходьби
+                    </div>
+                </li>
+                
+                <li><strong>Типи матеріалів для колізії:</strong>
+                    <div class="code-block">
+enum A3DMATERIALTYPE {
+    A3DMTL_CONCRETE = 0,  // Бетон
+    A3DMTL_WOOD,          // Дерево
+    A3DMTL_METALSOLID,    // Твердий метал
+    A3DMTL_METALBARREL,   // Металеві бочки
+    A3DMTL_GLASS,         // Скло
+    A3DMTL_RUBBER,        // Гума
+    A3DMTL_FLESH,         // М'язи
+    A3DMTL_WATER,         // Вода
+    A3DMTL_EARTH,         // Земля
+};
+                    </div>
+                </li>
+            </ol>
+
+            <h3>Процес трасування колізії</h3>
+            <div class="code-block">
+// Коли гравець або об'єкт рухається, виконується:
+1. A3DModel::RayTrace() або A3DModel::AABBTrace()
+   ↓
+2. Для кожного дочірнього меша (A3DMesh):
+   - Перевірка AABB меша з променем/об'ємом
+   - Якщо перетин → тестування кожної трикутника
+   - Використання A3DMESHPROP для визначення поведінки
+   ↓
+3. Повернення результату:
+   - Точка зіткнення
+   - Нормаль поверхні
+   - Коефіцієнт зіткнення (0-1)
+   - Тип матеріалу
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Чи є посилання на інші файли?</h2>
+            
+            <div class="note">
+                <strong>Так, крім текстур є посилання:</strong>
+            </div>
+            
+            <h3>Знайдені посилання в файлі:</h3>
+            <ol>
+                <li><strong>Текстури (зовнішні файли):</strong>
+                    <ul>
+                        <li>Building\textures\h\860.dds</li>
+                        <li>Building\textures\h\861.dds</li>
+                        <li>Building\textures\h\862.dds</li>
+                        <li>Building\textures\g\7ac.dds</li>
+                    </ul>
+                </li>
+                
+                <li><strong>Структурні елементи (вбудовані в файл):</strong>
+                    <ul>
+                        <li>Box01, Box367 - меші (колізійна геометрія)</li>
+                        <li>Object01 - об'єкт</li>
+                        <li>Plane01 - площина (можливо для колізії підлоги/стелі)</li>
+                    </ul>
+                </li>
+            </ol>
+
+            <h3>Що НЕ містить файл:</h3>
+            <ul>
+                <li>Посилання на .esp файли (колізійні дані)</li>
+                <li>Посилання на .kdt файли (KD-Tree колізія)</li>
+                <li>Посилання на .mod файли (моделі)</li>
+                <li>Посилання на звуки або GFX ефекти</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Висновок</h2>
+            <p><strong>CollisionFile.bmd</strong> це MOX файл, який містить:</p>
+            <ul>
+                <li>Візуальну геометрію (меші для рендерингу)</li>
+                <li>Колізійну геометрію (ті ж меші використовуються для колізії)</li>
+                <li>Властивості матеріалів (для звукових ефектів та фізики)</li>
+                <li>Текстури (зовнішні посилання)</li>
+            </ul>
+            
+            <p>Колізія реалізована через <strong>тестування променів та об'ємів з трикутниками мешів</strong> з урахуванням властивостей кожного меша (двосторонність, пропускання куль тощо).</p>
+        </div>
+
+        <div class="section">
+            <h2>Аналіз Blender експортера</h2>
+            
+            <h3>Що вміє експортер</h3>
+            <ul>
+                <li>Експорт геометрії (меші з вершинами та індексами)</li>
+                <li>Запис UV-координат</li>
+                <li>Запис нормалей</li>
+                <li>Запис кольорів вершин (diffuse, day, night)</li>
+                <li>Запис AABB (вирівняна обмежувальна коробка)</li>
+                <li>Запис базових матеріалів (ambient, diffuse, emissive, specular, power, two_sided)</li>
+            </ul>
+
+            <h3>Що НЕ вміє експортер (проблеми з колізією)</h3>
+            
+            <div class="note">
+                <strong>Критична проблема:</strong> Експортер НЕ записує властивості колізії (A3DMESHPROP), які визначають поведінку колізії.
+            </div>
+
+            <p>Експортер пропускає наступні важливі дані:</p>
+            
+            <table>
+                <tr>
+                    <th>Відсутні дані</th>
+                    <th>Опис</th>
+                    <th>Вплив на колізію</th>
+                </tr>
+                <tr>
+                    <td>A3DMESHPROP.dwProps</td>
+                    <td>Прапорці властивостей меша</td>
+                    <td>Визначає двосторонність, пропускання куль тощо</td>
+                </tr>
+                <tr>
+                    <td>A3DMESHPROP.MtlType</td>
+                    <td>Тип матеріалу</td>
+                    <td>Визначає звукові ефекти при зіткненні</td>
+                </tr>
+                <tr>
+                    <td>FG_2SIDES (0x0001)</td>
+                    <td>Двостороння колізія</td>
+                    <td>Промінь може вразити з обох сторін</td>
+                </tr>
+                <tr>
+                    <td>FG_SHOOTTHROUGH (0x0002)</td>
+                    <td>Пропускання куль</td>
+                    <td>Кулі проходять крізь об'єкт</td>
+                </tr>
+                <tr>
+                    <td>FG_NOMARK (0x0004)</td>
+                    <td>Без слідів</td>
+                    <td>Не залишає слідів від куль</td>
+                </tr>
+                <tr>
+                    <td>FG_PICKTHROUGH (0x0008)</td>
+                    <td>Пропускання при виборі</td>
+                    <td>Об'єкт не можна вибрати</td>
+                </tr>
+                <tr>
+                    <td>FG_WALKIGNORE (0x0080)</td>
+                    <td>Ігнорування при ходьбі</td>
+                    <td>Гравець може пройти крізь</td>
+                </tr>
+                <tr>
+                    <td>FG_NOLYFORWALK (0x0100)</td>
+                    <td>Тільки для ходьби</td>
+                    <td>Використовується тільки для руху</td>
+                </tr>
+            </table>
+
+            <h3>Поточна структура BMDMaterial в експортері</h3>
+            <div class="code-block">
+@dataclass
+class BMDMaterial:
+    name: str = ""
+    ambient: Color = (1.0, 1.0, 1.0, 1.0)
+    diffuse: Color = (1.0, 1.0, 1.0, 1.0)
+    emissive: Color = (0.0, 0.0, 0.0, 0.0)
+    specular: Color = (0.0, 0.0, 0.0, 1.0)
+    power: float = 0.0
+    two_sided: bool = False
+    
+    # ВІДСУТНЄ:
+    # collision_flags: int = 0  # Прапорці колізії
+    # material_type: int = 0    # Тип матеріалу
+            </div>
+
+            <h3>Що потрібно додати для повної підтримки колізії</h3>
+            
+            <ol>
+                <li><strong>Додати властивості колізії в BMDMaterial:</strong>
+                    <div class="code-block">
+@dataclass
+class BMDMaterial:
+    name: str = ""
+    ambient: Color = (1.0, 1.0, 1.0, 1.0)
+    diffuse: Color = (1.0, 1.0, 1.0, 1.0)
+    emissive: Color = (0.0, 0.0, 0.0, 0.0)
+    specular: Color = (0.0, 0.0, 0.0, 1.0)
+    power: float = 0.0
+    two_sided: bool = False
+    
+    # НОВІ ВЛАСТИВОСТІ:
+    collision_flags: int = 0  # A3DMESHPROP.dwProps
+    material_type: int = 0    # A3DMATERIALTYPE
+    
+    def get_2sides(self) -> bool:
+        return bool(self.collision_flags & 0x0001)
+    
+    def set_2sides(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0001
+        else:
+            self.collision_flags &= ~0x0001
+    
+    def get_shoot_through(self) -> bool:
+        return bool(self.collision_flags & 0x0002)
+    
+    def set_shoot_through(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0002
+        else:
+            self.collision_flags &= ~0x0002
+    
+    def get_no_mark(self) -> bool:
+        return bool(self.collision_flags & 0x0004)
+    
+    def set_no_mark(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0004
+        else:
+            self.collision_flags &= ~0x0004
+    
+    def get_pick_through(self) -> bool:
+        return bool(self.collision_flags & 0x0008)
+    
+    def set_pick_through(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0008
+        else:
+            self.collision_flags &= ~0x0008
+    
+    def get_walk_ignore(self) -> bool:
+        return bool(self.collision_flags & 0x0080)
+    
+    def set_walk_ignore(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0080
+        else:
+            self.collision_flags &= ~0x0080
+    
+    def get_only_for_walk(self) -> bool:
+        return bool(self.collision_flags & 0x0100)
+    
+    def set_only_for_walk(self, value: bool):
+        if value:
+            self.collision_flags |= 0x0100
+        else:
+            self.collision_flags &= ~0x0100
+                    </div>
+                </li>
+                
+                <li><strong>Додати запис колізійних даних в write_bmd_file:</strong>
+                    <div class="code-block">
+# Після запису кольорів вершин
+for vertex in mesh.vertices:
+    f.write(struct.pack("<I", vertex.day_color))
+
+for vertex in mesh.vertices:
+    f.write(struct.pack("<I", vertex.night_color))
+
+# Запис AABB
+_write_aabb(f, mesh.vertices)
+
+# ЗАПИС ВЛАСТИВОСТЕЙ КОЛІЗІЇ (A3DMESHPROP)
+if mesh_version == A3DLITMESH_CURRENT_VERSION:
+    # Запис прапорців колізії
+    f.write(struct.pack("<I", mesh.material.collision_flags))
+    # Запис типу матеріалу
+    f.write(struct.pack("<I", mesh.material.material_type))
+    # Запис інших властивостей матеріалу
+    _write_material(f, mesh.material)
+                    </div>
+                </li>
+                
+                <li><strong>Додати UI для налаштування колізії в Blender:</strong>
+                    <div class="code-block">
+# В Blender API потрібно додати властивості об'єкта
+class BMDCollisionProperties(bpy.types.PropertyGroup):
+    collision_flags: IntProperty(
+        name="Collision Flags",
+        description="Collision behavior flags",
+        default=0,
+        min=0,
+        max=0xFFFF,
+    )
+    material_type: EnumProperty(
+        name="Material Type",
+        description="Material type for collision sound effects",
+        items=[
+            ("0", "Concrete", "Default concrete material"),
+            ("1", "Wood", "Wooden surface"),
+            ("2", "Metal Solid", "Solid metal"),
+            ("3", "Metal Barrel", "Metal barrel"),
+            ("4", "Glass", "Glass surface"),
+            ("5", "Rubber", "Rubber surface"),
+            ("6", "Flesh", "Flesh/biological"),
+            ("7", "Water", "Water surface"),
+            ("8", "Earth", "Earth/ground"),
+        ],
+        default="0",
+    )
+    two_sided: BoolProperty(
+        name="Two Sided",
+        description="Enable two-sided collision",
+        default=False,
+    )
+    shoot_through: BoolProperty(
+        name="Shoot Through",
+        description="Bullets pass through this object",
+        default=False,
+    )
+    no_mark: BoolProperty(
+        name="No Mark",
+        description="Don't leave bullet marks",
+        default=False,
+    )
+    pick_through: BoolProperty(
+        name="Pick Through",
+        description="Object cannot be picked/selected",
+        default=False,
+    )
+    walk_ignore: BoolProperty(
+        name="Walk Ignore",
+        description="Player can walk through this object",
+        default=False,
+    )
+                    </div>
+                </li>
+            </ol>
+
+            <h3>Висновок по експортеру</h3>
+            <div class="note">
+                <strong>Експортер НЕ повністю підтримує колізію.</strong>
+                <p>Він експортує геометрію (яка використовується для колізійного тестування), але НЕ записує:</p>
+                <ul>
+                    <li>Прапорці властивостей колізії (A3DMESHPROP.dwProps)</li>
+                    <li>Тип матеріалу для звукових ефектів (A3DMATERIALTYPE)</li>
+                </ul>
+                <p>Це означає, що після експорту через цей плагін колізія працюватиме з <strong>замовчуванням</strong> (всі об'єкти матимуть стандартну поведінку).</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Джерела коду</h2>
+            <ul>
+                <li>Angelica2/Angelica3D/Source/A3DESP.cpp</li>
+                <li>Angelica2/Angelica3D/Source/A3DKDTree.cpp</li>
+                <li>Angelica2/Angelica3D/Source/A3DModel.cpp</li>
+                <li>Angelica2/Angelica3D/Source/A3DFrame.cpp</li>
+                <li>Angelica2/Angelica3D/Source/A3DMesh.cpp</li>
+                <li>Angelica2/Angelica3D/Header/A3DESP.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DKDTree.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DESPFile.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DKDTreeFile.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DModel.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DFrame.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DMesh.h</li>
+                <li>Angelica2/Angelica3D/Header/A3DTypes.h</li>
+                <li>Angelica2/Tools/MakeCollision/ESP_Write.cpp</li>
+                <li>Angelica2/Tools/MakeCollision/KDT_Write.cpp</li>
+                <li>Angelica2/Tools/MakeCollision/Side.cpp</li>
+                <li>Angelica2/Tools/MakeCollision/ESP_Leaf.cpp</li>
+                <li>Angelica2/Tools/MakeCollision/KDT_Main.cpp</li>
+                <li>Angelica2 Perfect World BMD Import Export Plugin/bmd_blender.py</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
